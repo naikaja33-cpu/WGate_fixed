@@ -115,7 +115,7 @@ const auth = {
   // the user back to the local login screen instead of a remote URL.
   redirectToLogin() {
     setToken(null);
-    window.location.href = '/';
+    window.location.href = import.meta.env.BASE_URL;
   },
 };
 

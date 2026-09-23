@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     setAuthError(null);
     if (shouldRedirect) {
-      window.location.href = '/';
+      window.location.href = import.meta.env.BASE_URL;
     }
   };
 
