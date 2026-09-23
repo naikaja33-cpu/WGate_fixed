@@ -1,0 +1,51 @@
+{
+  "name": "Notice",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Title of the notice"
+    },
+    "content": {
+      "type": "string",
+      "description": "Full content of the notice"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "announcement",
+        "rule",
+        "event",
+        "maintenance",
+        "other"
+      ],
+      "default": "announcement",
+      "description": "Type of notice"
+    },
+    "society_id": {
+      "type": "string",
+      "description": "Society this notice belongs to"
+    },
+    "society_name": {
+      "type": "string"
+    },
+    "posted_by": {
+      "type": "string",
+      "description": "Name of admin who posted"
+    },
+    "event_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Relevant date for events"
+    },
+    "is_pinned": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "title",
+    "content",
+    "society_id"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "ServiceTicket",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short title of the issue"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "plumber",
+        "electrician",
+        "carpenter",
+        "cleaning",
+        "pest_control",
+        "security",
+        "other"
+      ]
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "resolved",
+        "closed"
+      ],
+      "default": "open"
+    },
+    "flat_number": {
+      "type": "string"
+    },
+    "resident_email": {
+      "type": "string"
+    },
+    "assigned_to": {
+      "type": "string"
+    },
+    "resolution_notes": {
+      "type": "string"
+    },
+    "photo_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "category",
+    "flat_number"
+  ]
+}

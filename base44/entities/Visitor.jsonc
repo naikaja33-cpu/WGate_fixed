@@ -1,0 +1,66 @@
+{
+  "name": "Visitor",
+  "type": "object",
+  "properties": {
+    "visitor_name": {
+      "type": "string",
+      "description": "Name of the visitor"
+    },
+    "visitor_phone": {
+      "type": "string",
+      "description": "Phone number of visitor"
+    },
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "delivery",
+        "guest",
+        "cab",
+        "service",
+        "other"
+      ],
+      "description": "Purpose of visit"
+    },
+    "flat_number": {
+      "type": "string",
+      "description": "Flat/unit number being visited"
+    },
+    "resident_email": {
+      "type": "string",
+      "description": "Email of the resident to approve"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "vehicle_number": {
+      "type": "string",
+      "description": "Vehicle number if any"
+    },
+    "photo_url": {
+      "type": "string",
+      "description": "Photo of visitor"
+    },
+    "check_in_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "check_out_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "visitor_name",
+    "flat_number",
+    "purpose"
+  ]
+}

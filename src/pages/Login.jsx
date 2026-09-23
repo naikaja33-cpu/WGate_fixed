@@ -1,0 +1,79 @@
+import { useState } from 'react';
+import { Shield } from 'lucide-react';
+import AuthLayout from '@/components/AuthLayout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useAuth } from '@/lib/AuthContext';
+
+export default function Login() {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('admin@wgate.local');
+  const [password, setPassword] = useState('admin123');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+    try {
+      await login(email.trim(), password);
+    } catch (err) {
+      setError(err?.message || 'Invalid email or password');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <AuthLayout
+      icon={Shield}
+      title="WGATE"
+      subtitle="Society Management System"
+      footer="Local development build — no external accounts required."
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="login-email">Email</Label>
+          <Input
+            id="login-email"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="login-password">Password</Label>
+          <Input
+            id="login-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+
+        {error && (
+          <p className="text-sm text-destructive" role="alert">{error}</p>
+        )}
+
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? 'Signing in...' : 'Sign In'}
+        </Button>
+
+        <div className="text-xs text-muted-foreground bg-muted rounded-lg p-3 space-y-1">
+          <p className="font-medium text-foreground">Local development accounts</p>
+          <p>admin@wgate.local / admin123 (admin)</p>
+          <p>owner@wgate.local / owner123 (owner)</p>
+          <p>tenant@wgate.local / tenant123 (tenant)</p>
+          <p>guard@wgate.local / guard123 (guard)</p>
+        </div>
+      </form>
+    </AuthLayout>
+  );
+}

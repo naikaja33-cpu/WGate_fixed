@@ -1,0 +1,32 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "owner",
+        "tenant",
+        "guard"
+      ],
+      "default": "tenant"
+    },
+    "flat_number": {
+      "type": "string",
+      "description": "Flat/unit number for residents"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "society_id": {
+      "type": "string",
+      "description": "ID of the society the user belongs to"
+    },
+    "society_name": {
+      "type": "string",
+      "description": "Name of the society the user belongs to"
+    }
+  },
+  "required": []
+}

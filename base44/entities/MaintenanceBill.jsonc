@@ -1,0 +1,79 @@
+{
+  "name": "MaintenanceBill",
+  "type": "object",
+  "properties": {
+    "flat_number": {
+      "type": "string"
+    },
+    "resident_email": {
+      "type": "string"
+    },
+    "resident_name": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Amount in INR"
+    },
+    "month": {
+      "type": "string",
+      "description": "e.g. 2026-03"
+    },
+    "month_label": {
+      "type": "string",
+      "description": "e.g. March 2026"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "paid",
+        "overdue"
+      ],
+      "default": "pending"
+    },
+    "paid_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "payment_mode": {
+      "type": "string",
+      "enum": [
+        "upi",
+        "cash",
+        "bank_transfer",
+        "cheque"
+      ]
+    },
+    "transaction_id": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "line_items": {
+      "type": "array",
+      "description": "Breakdown of charges",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "flat_number",
+    "amount",
+    "month"
+  ]
+}

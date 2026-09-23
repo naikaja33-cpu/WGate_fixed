@@ -1,0 +1,23 @@
+{
+  "name": "Society",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the society"
+    },
+    "address": {
+      "type": "string",
+      "description": "Address of the society"
+    },
+    "city": {
+      "type": "string"
+    },
+    "total_flats": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

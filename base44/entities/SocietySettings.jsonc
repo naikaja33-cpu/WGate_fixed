@@ -1,0 +1,20 @@
+{
+  "name": "SocietySettings",
+  "type": "object",
+  "properties": {
+    "society_id": {
+      "type": "string",
+      "description": "Society this setting belongs to"
+    },
+    "enabled_menus": {
+      "type": "array",
+      "description": "List of enabled menu keys",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "society_id"
+  ]
+}
