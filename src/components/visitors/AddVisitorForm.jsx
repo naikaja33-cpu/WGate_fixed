@@ -93,7 +93,7 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                <PopoverContent className="p-0 w-[--radix-popover-trigger-width] z-[100]" align="start">
                   <Command>
                     <CommandInput
                       placeholder="Search or type flat..."
