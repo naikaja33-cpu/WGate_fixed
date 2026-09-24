@@ -4,11 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { X, ChevronsUpDown, Check } from 'lucide-react';
+import { X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { cn } from '@/lib/utils';
+
+const OTHER_FLAT = '__other__';
 
 export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
   const [form, setForm] = useState({
@@ -20,8 +19,8 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
     notes: '',
   });
   const [knownFlats, setKnownFlats] = useState([]);
-  const [flatPopoverOpen, setFlatPopoverOpen] = useState(false);
-  const [flatSearch, setFlatSearch] = useState('');
+  const [flatMode, setFlatMode] = useState(''); // '' (nothing picked yet), a real flat, or OTHER_FLAT
+  const [customFlat, setCustomFlat] = useState('');
   const [flatError, setFlatError] = useState('');
 
   useEffect(() => {
@@ -33,10 +32,19 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
         setKnownFlats(sorted);
       })
       .catch(() => {
-        // If this fails, the guard can still type the flat number manually below.
+        // If this fails, Other (type manually) still works below.
       });
     return () => { cancelled = true; };
   }, []);
+
+  const handleFlatSelect = (value) => {
+    setFlatMode(value);
+    if (value === OTHER_FLAT) {
+      update('flat_number', customFlat);
+    } else {
+      update('flat_number', value);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -78,63 +86,29 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Flat Number *</Label>
-              <Popover open={flatPopoverOpen} onOpenChange={setFlatPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={flatPopoverOpen}
-                    className="w-full justify-between font-normal"
-                  >
-                    <span className={cn(!form.flat_number && 'text-muted-foreground')}>
-                      {form.flat_number || 'Select flat'}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="p-0 w-[--radix-popover-trigger-width] z-[100]" align="start">
-                  <Command>
-                    <CommandInput
-                      placeholder="Search or type flat..."
-                      value={flatSearch}
-                      onValueChange={setFlatSearch}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        {flatSearch.trim() && (
-                          <button
-                            type="button"
-                            className="w-full px-2 py-1.5 text-sm text-left hover:bg-accent rounded-sm"
-                            onClick={() => {
-                              update('flat_number', flatSearch.trim());
-                              setFlatPopoverOpen(false);
-                            }}
-                          >
-                            Use "{flatSearch.trim()}"
-                          </button>
-                        )}
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {knownFlats.map((flat) => (
-                          <CommandItem
-                            key={flat}
-                            value={flat}
-                            onSelect={(val) => {
-                              update('flat_number', val);
-                              setFlatSearch('');
-                              setFlatPopoverOpen(false);
-                            }}
-                          >
-                            <Check className={cn('mr-2 h-4 w-4', form.flat_number === flat ? 'opacity-100' : 'opacity-0')} />
-                            {flat}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <Select value={flatMode} onValueChange={handleFlatSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select flat" />
+                </SelectTrigger>
+                <SelectContent className="z-[100]">
+                  {knownFlats.map((flat) => (
+                    <SelectItem key={flat} value={flat}>{flat}</SelectItem>
+                  ))}
+                  <SelectItem value={OTHER_FLAT}>Other (type manually)</SelectItem>
+                </SelectContent>
+              </Select>
+              {flatMode === OTHER_FLAT && (
+                <Input
+                  placeholder="e.g. A-101"
+                  value={customFlat}
+                  onChange={(e) => {
+                    setCustomFlat(e.target.value);
+                    update('flat_number', e.target.value);
+                  }}
+                  className="mt-2"
+                  autoFocus
+                />
+              )}
               {flatError && <p className="text-xs text-destructive">{flatError}</p>}
             </div>
             <div className="space-y-2">
