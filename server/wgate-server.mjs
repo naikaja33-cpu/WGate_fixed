@@ -520,6 +520,21 @@ app.post('/api/users/invite', requireAuth, requireAdmin, wrap(async (req, res) =
   res.status(201).json({ ...publicUser(user), initial_password: DEFAULT_INVITE_PASSWORD });
 }));
 
+/* Distinct resident flat numbers — used by the guard's visitor check-in
+   form to pick a flat instead of typing it freehand. Open to any
+   authenticated role (not just admin), but only returns flat numbers,
+   not full user records, so it doesn't leak other residents' PII. */
+app.get('/api/flats', requireAuth, wrap(async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT DISTINCT data->>'flat_number' AS flat_number
+    FROM entity_records
+    WHERE entity = 'User'
+      AND data->>'role' IN ('tenant', 'owner')
+      AND COALESCE(data->>'flat_number', '') <> ''
+    ORDER BY flat_number
+  `);
+  res.json(rows.map((r) => r.flat_number));
+}));
 /* ------------------------- realtime events ------------------------- */
 
 app.get('/api/events', requireAuth, (req, res) => {

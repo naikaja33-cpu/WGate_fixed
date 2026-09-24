@@ -122,7 +122,12 @@ const auth = {
 /* ------------------------------------------------------------------ */
 /* users (admin actions)                                              */
 /* ------------------------------------------------------------------ */
-
+const flats = {
+  // Distinct resident flat numbers, for the check-in flat-number picker.
+  async list() {
+    return request('/flats');
+  },
+};
 
 const users = {
   async inviteUser(email, role = 'tenant', details = {}) {
@@ -230,6 +235,7 @@ export const base44 = {
   auth,
   users,
   entities,
+  flats,
 };
 
 export default base44;
