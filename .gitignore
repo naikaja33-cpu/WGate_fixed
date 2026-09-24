@@ -1,2 +1,3 @@
 base44/.app.jsonc
 server/data/
+.env.local, node_modules/, dist/
