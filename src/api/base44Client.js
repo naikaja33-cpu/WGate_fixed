@@ -123,12 +123,15 @@ const auth = {
 /* users (admin actions)                                              */
 /* ------------------------------------------------------------------ */
 
+
 const users = {
-  async inviteUser(email, role = 'tenant') {
-    return request('/users/invite', { method: 'POST', body: { email, role } });
+  async inviteUser(email, role = 'tenant', details = {}) {
+    return request('/users/invite', {
+      method: 'POST',
+      body: { email, role, full_name: details.full_name, phone: details.phone, flat_number: details.flat_number },
+    });
   },
 };
-
 /* ------------------------------------------------------------------ */
 /* generic entity client + realtime subscriptions                     */
 /* ------------------------------------------------------------------ */
