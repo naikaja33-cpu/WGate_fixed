@@ -8,8 +8,8 @@ import { useAuth } from '@/lib/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@wgate.local');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -66,13 +66,7 @@ export default function Login() {
           {isSubmitting ? 'Signing in...' : 'Sign In'}
         </Button>
 
-        <div className="text-xs text-muted-foreground bg-muted rounded-lg p-3 space-y-1">
-          <p className="font-medium text-foreground">Local development accounts</p>
-          <p>admin@wgate.local / admin123 (admin)</p>
-          <p>owner@wgate.local / owner123 (owner)</p>
-          <p>tenant@wgate.local / tenant123 (tenant)</p>
-          <p>guard@wgate.local / guard123 (guard)</p>
-        </div>
+        
       </form>
     </AuthLayout>
   );
