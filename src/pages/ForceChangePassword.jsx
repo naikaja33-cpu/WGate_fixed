@@ -8,7 +8,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 
 export default function ForceChangePassword() {
-  const { setUser, logout } = useAuth();
+  const { setUser, logout, refreshUser } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -35,10 +35,12 @@ export default function ForceChangePassword() {
     setIsSubmitting(true);
     try {
       const result = await base44.auth.changePassword(currentPassword, newPassword);
-      // Backend returns the updated user (now with must_change_password:
-      // false); apply it directly so the app moves past this screen
-      // immediately without a second round trip.
+      // Apply the updated user from the response if present (fast path),
+      // but always also independently re-fetch /auth/me as a robust
+      // fallback — this guarantees the app picks up the cleared
+      // must_change_password flag even if the response shape changes.
       if (result?.user) setUser(result.user);
+      await refreshUser();
     } catch (err) {
       setError(err?.message || 'Something went wrong');
     } finally {
