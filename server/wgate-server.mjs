@@ -298,13 +298,16 @@ async function seedIfEmpty() {
 /* Sessions                                                            */
 /* ------------------------------------------------------------------ */
 
+
 function publicUser(user) {
   if (!user) return null;
   // eslint-disable-next-line no-unused-vars
   const { password_hash, ...rest } = user;
-  return rest;
+  // Default to true for any record that predates this field (existing
+  // seeded/invited accounts) — forces a password change rather than
+  // silently trusting whatever password they already had.
+  return { ...rest, must_change_password: user.must_change_password !== false };
 }
-
 async function createSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');
   await pool.query(
@@ -490,7 +493,7 @@ app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
   }
   const updated = { ...req.user, password_hash: hashPassword(next), updated_date: nowIso() };
   await updateEntityRecord('User', updated.id, updated);
-  res.json({ success: true });
+  res.json({ success: true, user: publicUser(updated) });
 }));
 
 /* Invite a member (local replacement for base44.users.inviteUser) */
