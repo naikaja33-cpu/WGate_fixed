@@ -491,7 +491,7 @@ app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
   if (!next || String(next).length < 6) {
     return res.status(400).json({ message: 'New password must be at least 6 characters' });
   }
-  const updated = { ...req.user, password_hash: hashPassword(next), updated_date: nowIso() };
+  const updated = { ...req.user, password_hash: hashPassword(next),must_change_password: false, updated_date: nowIso() };
   await updateEntityRecord('User', updated.id, updated);
   res.json({ success: true, user: publicUser(updated) });
 }));
