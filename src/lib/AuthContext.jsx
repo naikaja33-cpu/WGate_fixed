@@ -41,9 +41,9 @@ export const AuthProvider = ({ children }) => {
     checkAppState();
   }, [checkAppState]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, societyId) => {
     setAuthError(null);
-    const loggedInUser = await base44.auth.login(email, password);
+    const loggedInUser = await base44.auth.login(email, password, societyId);
     setUser(loggedInUser);
     setIsAuthenticated(true);
     return loggedInUser;

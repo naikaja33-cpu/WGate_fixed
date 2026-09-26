@@ -13,6 +13,7 @@ import Profile from '@/pages/Profile';
 import Billing from '@/pages/Billing';
 import Onboarding from '@/pages/Onboarding';
 import ForceChangePassword from '@/pages/ForceChangePassword';
+import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
 import NoticeBoard from '@/pages/NoticeBoard';
 import { NotificationProvider } from '@/components/notifications/NotificationProvider';
 import { Toaster as SonnerToaster } from 'sonner';
@@ -43,6 +44,13 @@ const AuthenticatedApp = () => {
   if (user.must_change_password) {
     return <ForceChangePassword />;
   }
+
+  // Super admins aren't part of any society — send them straight to
+  // their own dashboard instead of the normal onboarding/app flow.
+  if (user.role === 'superadmin') {
+    return <SuperAdminDashboard />;
+  }
+
   // Show onboarding for new users who haven't selected a society
   if (!user.society_id) {
     return <Onboarding onComplete={checkAppState} />;

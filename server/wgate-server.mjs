@@ -124,11 +124,14 @@ async function initSchema() {
       id UUID PRIMARY KEY,
       user_id UUID NOT NULL,
       token_hash TEXT NOT NULL UNIQUE,
+      active_society_id UUID,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       expires_at TIMESTAMPTZ NOT NULL
     );
   `);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS active_society_id UUID;`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_active_society_id ON sessions(active_society_id);`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -176,6 +179,66 @@ async function findUserByEmail(email) {
     [normEmail(email)]
   );
   return rows[0]?.data || null;
+}
+
+async function getSocietyById(id) {
+  if (!id || typeof id !== 'string') return null;
+  const { rows } = await pool.query(
+    `SELECT data FROM entity_records WHERE entity = 'Society' AND id = $1`,
+    [id]
+  );
+  return rows[0]?.data || null;
+}
+
+async function assertSocietyReference(societyId, _actor) {
+  if (societyId === undefined || societyId === null || societyId === '') return null;
+  if (typeof societyId !== 'string') {
+    throw Object.assign(new Error('Society is required'), { status: 400 });
+  }
+  const society = await getSocietyById(societyId);
+  if (!society) {
+    throw Object.assign(new Error('Society not found'), { status: 404 });
+  }
+  return society;
+}
+
+async function findResidentForRecord(record) {
+  if (!record) return null;
+  if (record.resident_email) {
+    return findUserByEmail(record.resident_email);
+  }
+  if (!record.flat_number || typeof record.flat_number !== 'string') return null;
+  const { rows } = await pool.query(`
+    SELECT data
+    FROM entity_records
+    WHERE entity = 'User'
+      AND data->>'flat_number' = $1
+      AND data->>'role' IN ('tenant', 'owner')
+    ORDER BY created_date DESC
+    LIMIT 1
+  `, [record.flat_number]);
+  return rows[0]?.data || null;
+}
+
+async function recordSocietyId(record) {
+  if (!record) return null;
+  if (record.society_id) return record.society_id;
+  const resident = await findResidentForRecord(record);
+  return resident?.society_id || null;
+}
+
+async function recordBelongsToActiveSociety(entity, record, activeSocietyId) {
+  if (!activeSocietyId) return true;
+  if (entity === 'Society') return true;
+  if (entity === 'User') return record?.society_id === activeSocietyId;
+  return await recordSocietyId(record) === activeSocietyId;
+}
+
+async function filterActiveSocietyRecords(entity, records, activeSocietyId) {
+  const owned = await Promise.all(records.map(async (record) => (
+    await recordBelongsToActiveSociety(entity, record, activeSocietyId)
+  )));
+  return records.filter((_record, index) => owned[index]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -226,6 +289,20 @@ async function seedIfEmpty() {
   const tenant = mkUser('tenant@wgate.local', 'tenant123', 'Asha Tenant', 'tenant', 'A-101', '9000000003');
   const owner = mkUser('owner@wgate.local', 'owner123', 'Om Owner', 'owner', 'B-202', '9000000004');
   for (const u of [admin, guard, tenant, owner]) await insertEntityRecord('User', u);
+
+  // Super admin isn't tied to any society.
+  const superadmin = baseRecord({
+    email: 'superadmin@wgate.local',
+    password_hash: hashPassword('super123'),
+    full_name: 'Super Admin',
+    role: 'superadmin',
+    society_id: null,
+    society_name: '',
+    disabled: false,
+    is_verified: true,
+    must_change_password: true,
+  });
+  await insertEntityRecord('User', superadmin);
 
   const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
 
@@ -299,20 +376,33 @@ async function seedIfEmpty() {
 /* ------------------------------------------------------------------ */
 
 
-function publicUser(user) {
+function publicUser(user, activeSociety) {
   if (!user) return null;
   // eslint-disable-next-line no-unused-vars
   const { password_hash, ...rest } = user;
+  const homeSocietyId = user.society_id ?? null;
+  const homeSocietyName = user.society_name ?? '';
+  const activeSocietyId = activeSociety?.id || homeSocietyId;
+  const activeSocietyName = activeSociety?.name || homeSocietyName;
   // Default to true for any record that predates this field (existing
   // seeded/invited accounts) — forces a password change rather than
   // silently trusting whatever password they already had.
-  return { ...rest, must_change_password: user.must_change_password !== false };
+  return {
+    ...rest,
+    society_id: activeSocietyId,
+    society_name: activeSocietyName,
+    home_society_id: homeSocietyId,
+    home_society_name: homeSocietyName,
+    must_change_password: user.must_change_password !== false,
+  };
 }
-async function createSession(userId) {
+
+async function createSession(userId, activeSocietyId) {
   const token = crypto.randomBytes(32).toString('hex');
   await pool.query(
-    'INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)',
-    [newId(), userId, sha256(token), new Date(Date.now() + SESSION_TTL_MS)]
+    `INSERT INTO sessions (id, user_id, token_hash, active_society_id, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [newId(), userId, sha256(token), activeSocietyId || null, new Date(Date.now() + SESSION_TTL_MS)]
   );
   return token;
 }
@@ -331,7 +421,14 @@ async function resolveSession(token) {
   if (!session) return null;
   const user = await getEntityRecord('User', session.user_id);
   if (!user || user.disabled) return null;
-  return { session, user };
+
+  const activeSociety = session.active_society_id
+    ? await getSocietyById(session.active_society_id)
+    : null;
+  const fallbackSociety = user.society_id
+    ? await getSocietyById(user.society_id)
+    : null;
+  return { session, user, activeSociety: activeSociety || fallbackSociety };
 }
 
 function bearerToken(req) {
@@ -347,6 +444,8 @@ async function requireAuth(req, res, next) {
     if (!resolved) return res.status(401).json({ message: 'Authentication required' });
     req.user = resolved.user;
     req.session = resolved.session;
+    req.activeSociety = resolved.activeSociety;
+    req.activeSocietyId = resolved.activeSociety?.id || resolved.user.society_id || null;
     next();
   } catch (err) {
     next(err);
@@ -358,17 +457,24 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireSuperadmin(req, res, next) {
+  if (req.user?.role !== 'superadmin') return res.status(403).json({ message: 'Super admin access required' });
+  next();
+}
+
 /* ------------------------------------------------------------------ */
 /* Server-sent events (for entity.subscribe)                          */
 /* ------------------------------------------------------------------ */
 
-const sseClients = new Set();
+const sseClients = new Map();
 
-function broadcast(entity, type, record) {
+function broadcast(entity, type, record, activeSociety) {
   if (sseClients.size === 0) return;
-  const data = entity === 'User' ? publicUser(record) : record;
+  const data = entity === 'User' ? publicUser(record, activeSociety) : record;
   const payload = `data: ${JSON.stringify({ entity, type, id: record.id, data, timestamp: nowIso() })}\n\n`;
-  for (const client of sseClients) client.write(payload);
+  for (const [client, clientSocietyId] of sseClients) {
+    if (!clientSocietyId || clientSocietyId === activeSociety?.id) client.write(payload);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -423,7 +529,7 @@ function sortRecords(records, sort) {
   });
 }
 
-const clean = (entity, record) => (entity === 'User' ? publicUser(record) : record);
+const clean = (entity, record, activeSociety) => (entity === 'User' ? publicUser(record, activeSociety) : record);
 
 /* ------------------------------------------------------------------ */
 /* App                                                                */
@@ -444,20 +550,42 @@ app.get('/api/public-settings', (_req, res) => {
   res.json({ id: 'wgate-local', public_settings: { auth_mode: 'local', app_name: 'WGate' } });
 });
 
+app.get('/api/public/societies', wrap(async (_req, res) => {
+  const societies = await listEntity('Society');
+  res.json(societies.map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats })));
+}));
+
 /* ---------------------------- auth ---------------------------- */
 
 app.post('/api/auth/login', wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   const password = req.body?.password;
+  const requestedSocietyId = req.body?.society_id || null;
   if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
 
   const user = await findUserByEmail(email);
   if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
+
+  if (user.role === 'superadmin') {
+    // Super admins aren't tied to any single society — they manage all
+    // of them via the dedicated /api/superadmin/* routes instead.
+    await pruneSessions();
+    const token = await createSession(user.id, null);
+    return res.json({ token, user: publicUser(user, null) });
+  }
+
+  if (!requestedSocietyId) return res.status(400).json({ message: 'Society is required' });
+  const society = await getSocietyById(requestedSocietyId);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  if (user.society_id !== requestedSocietyId) {
+    return res.status(403).json({ message: 'This account is not a member of the selected society' });
+  }
+
   await pruneSessions();
-  const token = await createSession(user.id);
-  res.json({ token, user: publicUser(user) });
+  const token = await createSession(user.id, requestedSocietyId);
+  res.json({ token, user: publicUser(user, society) });
 }));
 
 app.post('/api/auth/logout', wrap(async (req, res) => {
@@ -469,7 +597,7 @@ app.post('/api/auth/logout', wrap(async (req, res) => {
 }));
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json(publicUser(req.user));
+  res.json(publicUser(req.user, req.activeSociety));
 });
 
 app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
@@ -477,10 +605,21 @@ app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
   for (const key of SELF_EDITABLE_FIELDS) {
     if (req.body && Object.prototype.hasOwnProperty.call(req.body, key)) patch[key] = req.body[key];
   }
+
+  if (patch.society_id !== undefined) {
+    if (req.user.society_id && patch.society_id && patch.society_id !== req.user.society_id) {
+      return res.status(403).json({ message: 'You cannot switch societies from your profile' });
+    }
+    if (patch.society_id) {
+      const society = await assertSocietyReference(patch.society_id, req.user);
+      patch.society_name = society.name;
+    }
+  }
+
   const updated = { ...req.user, ...patch, updated_date: nowIso() };
   await updateEntityRecord('User', updated.id, updated);
-  broadcast('User', 'update', updated);
-  res.json(publicUser(updated));
+  broadcast('User', 'update', updated, req.activeSociety);
+  res.json(publicUser(updated, req.activeSociety));
 }));
 
 app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
@@ -491,9 +630,9 @@ app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
   if (!next || String(next).length < 6) {
     return res.status(400).json({ message: 'New password must be at least 6 characters' });
   }
-  const updated = { ...req.user, password_hash: hashPassword(next),must_change_password: false, updated_date: nowIso() };
+  const updated = { ...req.user, password_hash: hashPassword(next), must_change_password: false, updated_date: nowIso() };
   await updateEntityRecord('User', updated.id, updated);
-  res.json({ success: true, user: publicUser(updated) });
+  res.json({ success: true, user: publicUser(updated, req.activeSociety) });
 }));
 
 /* Invite a member (local replacement for base44.users.inviteUser) */
@@ -503,6 +642,8 @@ app.post('/api/users/invite', requireAuth, requireAdmin, wrap(async (req, res) =
   if (await findUserByEmail(email)) {
     return res.status(409).json({ message: 'A user with this email already exists' });
   }
+  const society = await assertSocietyReference(req.body?.society_id, req.user);
+  if (!society) return res.status(400).json({ message: 'Society is required' });
   const requested = req.body?.role;
   const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) ? requested : 'tenant';
   const user = {
@@ -513,29 +654,92 @@ app.post('/api/users/invite', requireAuth, requireAdmin, wrap(async (req, res) =
     role,
     flat_number: req.body?.flat_number || '',
     phone: req.body?.phone || '',
-    society_id: req.user.society_id || null,
-    society_name: req.user.society_name || '',
+    society_id: society.id,
+    society_name: society.name,
     disabled: false,
     is_verified: false,
   };
   await insertEntityRecord('User', user);
-  broadcast('User', 'create', user);
-  res.status(201).json({ ...publicUser(user), initial_password: DEFAULT_INVITE_PASSWORD });
+  broadcast('User', 'create', user, req.activeSociety);
+  res.status(201).json({ ...publicUser(user, society), initial_password: DEFAULT_INVITE_PASSWORD });
 }));
+
+/* ------------------------- super admin routes ------------------------- */
+/* Only a 'superadmin' account can reach these: creating new societies
+   and creating the first admin for a society. Regular admins never see
+   or reach these routes — society/admin creation is deliberately kept
+   separate from the normal admin invite flow. */
+
+app.post('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ message: 'Society name is required' });
+  const society = baseRecord({
+    name,
+    address: req.body?.address || '',
+    city: req.body?.city || '',
+    total_flats: req.body?.total_flats || null,
+    created_by: req.user.email,
+    created_by_id: req.user.id,
+  });
+  await insertEntityRecord('Society', society);
+  res.status(201).json(society);
+}));
+
+app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const email = normEmail(req.body?.email);
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  if (await findUserByEmail(email)) {
+    return res.status(409).json({ message: 'A user with this email already exists' });
+  }
+  const society = await assertSocietyReference(req.body?.society_id, req.user);
+  if (!society) return res.status(400).json({ message: 'Society is required' });
+
+  const adminUser = {
+    ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
+    email,
+    password_hash: hashPassword(DEFAULT_INVITE_PASSWORD),
+    full_name: req.body?.full_name || email.split('@')[0],
+    role: 'admin',
+    flat_number: req.body?.flat_number || '',
+    phone: req.body?.phone || '',
+    society_id: society.id,
+    society_name: society.name,
+    disabled: false,
+    is_verified: false,
+    must_change_password: true,
+  };
+  await insertEntityRecord('User', adminUser);
+  res.status(201).json({ ...publicUser(adminUser, society), initial_password: DEFAULT_INVITE_PASSWORD });
+}));
+
+app.get('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (_req, res) => {
+  const [societies, allUsers] = await Promise.all([listEntity('Society'), listEntity('User')]);
+  const withAdmins = societies.map((s) => ({
+    ...s,
+    admins: allUsers
+      .filter((u) => u.society_id === s.id && u.role === 'admin')
+      .map((u) => publicUser(u, s))
+      .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+  }));
+  res.json(withAdmins.sort((a, b) => a.name.localeCompare(b.name)));
+}));
+
+/* ------------------------------------------------------------------ */
 
 /* Distinct resident flat numbers — used by the guard's visitor check-in
    form to pick a flat instead of typing it freehand. Open to any
    authenticated role (not just admin), but only returns flat numbers,
    not full user records, so it doesn't leak other residents' PII. */
-app.get('/api/flats', requireAuth, wrap(async (_req, res) => {
+app.get('/api/flats', requireAuth, wrap(async (req, res) => {
   const { rows } = await pool.query(`
     SELECT DISTINCT data->>'flat_number' AS flat_number
     FROM entity_records
     WHERE entity = 'User'
       AND data->>'role' IN ('tenant', 'owner')
-      AND COALESCE(data->>'flat_number', '') <> ''
+      AND data->>'flat_number' <> ''
+      AND data->>'society_id' = $1
     ORDER BY flat_number
-  `);
+  `, [req.activeSocietyId]);
   res.json(rows.map((r) => r.flat_number));
 }));
 /* ------------------------- realtime events ------------------------- */
@@ -549,7 +753,7 @@ app.get('/api/events', requireAuth, (req, res) => {
   });
   res.flushHeaders?.();
   res.write('retry: 2000\n\n');
-  sseClients.add(res);
+  sseClients.set(res, req.activeSocietyId);
   const heartbeat = setInterval(() => res.write(': ping\n\n'), 25000);
   req.on('close', () => {
     clearInterval(heartbeat);
@@ -574,10 +778,15 @@ function assertUserWriteAllowed(req, res) {
     res.status(403).json({ message: 'Only admins can manage users' });
     return false;
   }
+  if (req.params.name === 'Society') {
+    res.status(403).json({ message: 'Societies can only be managed by a super admin' });
+    return false;
+  }
   return true;
 }
 
-async function buildRecord(entity, input, actor) {
+async function buildRecord(entity, input, actor, options = {}) {
+  const { requireSociety = false, activeSociety = null } = options;
   const record = {
     ...(ENTITY_DEFAULTS[entity] || {}),
     ...input,
@@ -589,13 +798,26 @@ async function buildRecord(entity, input, actor) {
     is_sample: false,
   };
   if (entity === 'User') {
+    if (record.role === 'superadmin') {
+      throw Object.assign(new Error('Super admin accounts cannot be created this way'), { status: 403 });
+    }
     record.email = normEmail(record.email);
     if (!record.email) throw Object.assign(new Error('Email is required'), { status: 400 });
     if (await findUserByEmail(record.email)) {
       throw Object.assign(new Error('A user with this email already exists'), { status: 409 });
     }
+    if (requireSociety) {
+      const society = await assertSocietyReference(record.society_id, actor);
+      if (!society) throw Object.assign(new Error('Society is required'), { status: 400 });
+      record.society_id = society.id;
+      record.society_name = society.name;
+    }
     record.password_hash = hashPassword(record.password || DEFAULT_INVITE_PASSWORD);
     delete record.password;
+  }
+  if ((entity === 'Notice' || entity === 'SocietySettings') && !record.society_id && activeSociety) {
+    record.society_id = activeSociety.id;
+    record.society_name = activeSociety.name;
   }
   return record;
 }
@@ -607,13 +829,18 @@ entityRouter.get('/:name', wrap(async (req, res) => {
     try { query = JSON.parse(String(req.query.q)); } catch { return res.status(400).json({ message: 'Invalid q parameter' }); }
   }
   let rows = await listEntity(entity);
-  if (entity === 'User' && req.user.role !== 'admin') rows = rows.filter((u) => u.id === req.user.id);
+  if (entity === 'User') {
+    rows = req.user.role === 'admin'
+      ? rows.filter((user) => user.society_id === req.activeSocietyId)
+      : rows.filter((user) => user.id === req.user.id);
+  }
+  rows = await filterActiveSocietyRecords(entity, rows, req.activeSocietyId);
   rows = rows.filter((r) => matchesQuery(r, query));
   rows = sortRecords(rows, req.query.sort ? String(req.query.sort) : '-created_date');
   const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
   const limit = parseInt(req.query.limit, 10);
   rows = rows.slice(skip, Number.isFinite(limit) && limit > 0 ? skip + limit : undefined);
-  res.json(rows.map((r) => clean(entity, r)));
+  res.json(rows.map((r) => clean(entity, r, req.activeSociety)));
 }));
 
 entityRouter.get('/:name/:id', wrap(async (req, res) => {
@@ -623,7 +850,10 @@ entityRouter.get('/:name/:id', wrap(async (req, res) => {
   if (entity === 'User' && req.user.role !== 'admin' && record.id !== req.user.id) {
     return res.status(403).json({ message: 'Forbidden' });
   }
-  res.json(clean(entity, record));
+  if (entity !== 'Society' && !(await recordBelongsToActiveSociety(entity, record, req.activeSocietyId))) {
+    return res.status(403).json({ message: 'This record does not belong to the selected society' });
+  }
+  res.json(clean(entity, record, req.activeSociety));
 }));
 
 entityRouter.post('/:name/bulk', wrap(async (req, res) => {
@@ -634,12 +864,18 @@ entityRouter.post('/:name/bulk', wrap(async (req, res) => {
   try {
     const created = [];
     for (const item of items) {
-      const record = await buildRecord(entity, item || {}, req.user);
+      const record = await buildRecord(entity, item || {}, req.user, {
+        requireSociety: entity === 'User',
+        activeSociety: req.activeSociety,
+      });
+      if (entity !== 'Society' && !(await recordBelongsToActiveSociety(entity, record, req.activeSocietyId))) {
+        return res.status(403).json({ message: 'This record does not belong to the selected society' });
+      }
       await insertEntityRecord(entity, record);
       created.push(record);
     }
-    created.forEach((r) => broadcast(entity, 'create', r));
-    res.status(201).json(created.map((r) => clean(entity, r)));
+    created.forEach((r) => broadcast(entity, 'create', r, req.activeSociety));
+    res.status(201).json(created.map((r) => clean(entity, r, req.activeSociety)));
   } catch (err) {
     res.status(err.status || 400).json({ message: err.message });
   }
@@ -649,10 +885,16 @@ entityRouter.post('/:name', wrap(async (req, res) => {
   if (!assertUserWriteAllowed(req, res)) return;
   const entity = req.params.name;
   try {
-    const record = await buildRecord(entity, req.body || {}, req.user);
+    const record = await buildRecord(entity, req.body || {}, req.user, {
+      requireSociety: entity === 'User',
+      activeSociety: req.activeSociety,
+    });
+    if (entity !== 'Society' && !(await recordBelongsToActiveSociety(entity, record, req.activeSocietyId))) {
+      return res.status(403).json({ message: 'This record does not belong to the selected society' });
+    }
     await insertEntityRecord(entity, record);
-    broadcast(entity, 'create', record);
-    res.status(201).json(clean(entity, record));
+    broadcast(entity, 'create', record, req.activeSociety);
+    res.status(201).json(clean(entity, record, req.activeSociety));
   } catch (err) {
     res.status(err.status || 400).json({ message: err.message });
   }
@@ -663,6 +905,9 @@ async function updateHandler(req, res) {
   const entity = req.params.name;
   const record = await getEntityRecord(entity, req.params.id);
   if (!record) return res.status(404).json({ message: `${entity} not found` });
+  if (entity !== 'Society' && !(await recordBelongsToActiveSociety(entity, record, req.activeSocietyId))) {
+    return res.status(403).json({ message: 'This record does not belong to the selected society' });
+  }
 
   const patch = { ...(req.body || {}) };
   delete patch.id;
@@ -689,12 +934,26 @@ async function updateHandler(req, res) {
     if (record.id === req.user.id && patch.role && patch.role !== 'admin') {
       return res.status(400).json({ message: 'You cannot remove your own admin role' });
     }
+    if (patch.society_id !== undefined) {
+      const society = await assertSocietyReference(patch.society_id, req.user);
+      patch.society_name = society.name;
+    }
+  } else if (patch.society_id !== undefined) {
+    const society = await assertSocietyReference(patch.society_id, req.user);
+    if (society.id !== req.activeSocietyId) {
+      return res.status(403).json({ message: 'You cannot move this record to another society' });
+    }
+    patch.society_name = society.name;
   }
 
   const updated = { ...record, ...patch, updated_date: nowIso() };
+  if ((entity === 'Notice' || entity === 'SocietySettings') && !updated.society_id && req.activeSociety) {
+    updated.society_id = req.activeSociety.id;
+    updated.society_name = req.activeSociety.name;
+  }
   await updateEntityRecord(entity, req.params.id, updated);
-  broadcast(entity, 'update', updated);
-  res.json(clean(entity, updated));
+  broadcast(entity, 'update', updated, req.activeSociety);
+  res.json(clean(entity, updated, req.activeSociety));
 }
 entityRouter.put('/:name/:id', wrap(updateHandler));
 entityRouter.patch('/:name/:id', wrap(updateHandler));
@@ -704,6 +963,20 @@ entityRouter.delete('/:name/:id', wrap(async (req, res) => {
   const entity = req.params.name;
   const record = await getEntityRecord(entity, req.params.id);
   if (!record) return res.status(404).json({ message: `${entity} not found` });
+  if (entity === 'Society') {
+    const [users, notices, settings, sessions] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int AS n FROM entity_records WHERE entity = \'User\' AND data->>\'society_id\' = $1', [record.id]),
+      pool.query('SELECT COUNT(*)::int AS n FROM entity_records WHERE entity = \'Notice\' AND data->>\'society_id\' = $1', [record.id]),
+      pool.query('SELECT COUNT(*)::int AS n FROM entity_records WHERE entity = \'SocietySettings\' AND data->>\'society_id\' = $1', [record.id]),
+      pool.query('SELECT COUNT(*)::int AS n FROM sessions WHERE active_society_id = $1', [record.id]),
+    ]);
+    const references = users[0].n + notices[0].n + settings[0].n + sessions[0].n;
+    if (references > 0) {
+      return res.status(409).json({ message: 'This society cannot be deleted while it has references' });
+    }
+  } else if (!(await recordBelongsToActiveSociety(entity, record, req.activeSocietyId))) {
+    return res.status(403).json({ message: 'This record does not belong to the selected society' });
+  }
   if (entity === 'User' && record.id === req.user.id) {
     return res.status(400).json({ message: 'You cannot delete your own account' });
   }
@@ -711,7 +984,7 @@ entityRouter.delete('/:name/:id', wrap(async (req, res) => {
   if (entity === 'User') {
     await pool.query('DELETE FROM sessions WHERE user_id = $1', [record.id]);
   }
-  broadcast(entity, 'delete', record);
+  broadcast(entity, 'delete', record, req.activeSociety);
   res.json({ success: true });
 }));
 

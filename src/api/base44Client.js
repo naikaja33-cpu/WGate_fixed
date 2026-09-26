@@ -70,8 +70,12 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 /* ------------------------------------------------------------------ */
 
 const auth = {
-  async login(email, password) {
-    const result = await request('/auth/login', { method: 'POST', body: { email, password }, auth: false });
+  async login(email, password, societyId) {
+    const result = await request('/auth/login', {
+      method: 'POST',
+      body: { email, password, society_id: societyId },
+      auth: false,
+    });
     setToken(result.token);
     return result.user;
   },
@@ -129,12 +133,39 @@ const flats = {
   },
 };
 
+const superadmin = {
+  async listSocieties() {
+    return request('/superadmin/societies');
+  },
+  async createSociety(data) {
+    return request('/superadmin/societies', { method: 'POST', body: data });
+  },
+  async createAdmin(data) {
+    return request('/superadmin/admins', { method: 'POST', body: data });
+  },
+};
+
 const users = {
   async inviteUser(email, role = 'tenant', details = {}) {
     return request('/users/invite', {
       method: 'POST',
-      body: { email, role, full_name: details.full_name, phone: details.phone, flat_number: details.flat_number },
+      body: {
+        email,
+        role,
+        full_name: details.full_name,
+        phone: details.phone,
+        flat_number: details.flat_number,
+        society_id: details.society_id,
+      },
     });
+  },
+};
+
+const publicApi = {
+  societies: {
+    async list() {
+      return request('/public/societies');
+    },
   },
 };
 /* ------------------------------------------------------------------ */
@@ -235,7 +266,9 @@ export const base44 = {
   auth,
   users,
   entities,
+  publicApi,
   flats,
+  superadmin,
 };
 
 export default base44;
