@@ -140,8 +140,17 @@ const superadmin = {
   async createSociety(data) {
     return request('/superadmin/societies', { method: 'POST', body: data });
   },
+  async updateSociety(id, data) {
+    return request(`/superadmin/societies/${id}`, { method: 'PATCH', body: data });
+  },
+  async deleteSociety(id) {
+    return request(`/superadmin/societies/${id}`, { method: 'DELETE' });
+  },
   async createAdmin(data) {
     return request('/superadmin/admins', { method: 'POST', body: data });
+  },
+  async resetAdminPassword(id) {
+    return request(`/superadmin/admins/${id}/reset-password`, { method: 'POST' });
   },
 };
 

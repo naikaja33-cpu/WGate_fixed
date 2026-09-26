@@ -724,6 +724,84 @@ app.get('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async 
   res.json(withAdmins.sort((a, b) => a.name.localeCompare(b.name)));
 }));
 
+app.patch('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getEntityRecord('Society', req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+
+  const patch = {};
+  if (req.body?.name !== undefined) {
+    const name = String(req.body.name).trim();
+    if (!name) return res.status(400).json({ message: 'Society name is required' });
+    patch.name = name;
+  }
+  if (req.body?.city !== undefined) patch.city = req.body.city;
+  if (req.body?.address !== undefined) patch.address = req.body.address;
+  if (req.body?.total_flats !== undefined) patch.total_flats = req.body.total_flats;
+
+  const updated = { ...society, ...patch, updated_date: nowIso() };
+  await updateEntityRecord('Society', updated.id, updated);
+
+  // Keep the denormalized society_name in sync wherever it's stored
+  // alongside a society_id, so renaming a society doesn't leave stale
+  // names on existing user/notice records.
+  if (patch.name && patch.name !== society.name) {
+    for (const entity of ['User', 'Notice']) {
+      const affected = (await listEntity(entity)).filter((r) => r.society_id === updated.id);
+      for (const r of affected) {
+        await updateEntityRecord(entity, r.id, { ...r, society_name: updated.name, updated_date: nowIso() });
+      }
+    }
+  }
+
+  res.json(updated);
+}));
+
+app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getEntityRecord('Society', req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+
+  const [users, notices, settings, sessionsCount] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS n FROM entity_records WHERE entity = 'User' AND data->>'society_id' = $1`, [society.id]),
+    pool.query(`SELECT COUNT(*)::int AS n FROM entity_records WHERE entity = 'Notice' AND data->>'society_id' = $1`, [society.id]),
+    pool.query(`SELECT COUNT(*)::int AS n FROM entity_records WHERE entity = 'SocietySettings' AND data->>'society_id' = $1`, [society.id]),
+    pool.query(`SELECT COUNT(*)::int AS n FROM sessions WHERE active_society_id = $1`, [society.id]),
+  ]);
+  const references = users.rows[0].n + notices.rows[0].n + settings.rows[0].n + sessionsCount.rows[0].n;
+  if (references > 0) {
+    return res.status(409).json({
+      message: 'This society still has members or data (admins, residents, notices, etc.). Remove them first before deleting the society.',
+    });
+  }
+
+  await deleteEntityRecord('Society', society.id);
+  res.json({ success: true });
+}));
+
+function generateTempPassword() {
+  return `Temp-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+}
+
+app.post('/api/superadmin/admins/:id/reset-password', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const target = await getEntityRecord('User', req.params.id);
+  if (!target) return res.status(404).json({ message: 'Admin not found' });
+  if (target.role !== 'admin') return res.status(400).json({ message: 'This action is only available for society admins' });
+
+  const tempPassword = generateTempPassword();
+  const updated = {
+    ...target,
+    password_hash: hashPassword(tempPassword),
+    must_change_password: true,
+    updated_date: nowIso(),
+  };
+  await updateEntityRecord('User', updated.id, updated);
+
+  // Resetting a password should also invalidate any sessions they're
+  // currently logged in with, forcing a fresh login with the new password.
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [updated.id]);
+
+  res.json({ email: updated.email, password: tempPassword });
+}));
+
 /* ------------------------------------------------------------------ */
 
 /* Distinct resident flat numbers — used by the guard's visitor check-in

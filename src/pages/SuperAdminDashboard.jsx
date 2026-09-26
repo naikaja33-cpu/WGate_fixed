@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Building2, Copy, Check, LogOut } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,10 +12,12 @@ export default function SuperAdminDashboard() {
   const [societies, setSocieties] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [showAddSociety, setShowAddSociety] = useState(false);
+  const [editingSociety, setEditingSociety] = useState(null); // society object, or null
   const [showAddAdmin, setShowAddAdmin] = useState(null); // society id, or null
-  const [createdCredentials, setCreatedCredentials] = useState(null); // { email, password }
+  const [credentialsModal, setCredentialsModal] = useState(null); // { title, email, password }
 
   const loadSocieties = async () => {
     setIsLoading(true);
@@ -33,6 +35,28 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     loadSocieties();
   }, []);
+
+  const handleDeleteSociety = async (society) => {
+    setActionError('');
+    if (!window.confirm(`Delete "${society.name}"? This cannot be undone.`)) return;
+    try {
+      await base44.superadmin.deleteSociety(society.id);
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to delete society');
+    }
+  };
+
+  const handleResetPassword = async (admin) => {
+    setActionError('');
+    if (!window.confirm(`Reset the password for ${admin.full_name || admin.email}? Their current password will stop working immediately.`)) return;
+    try {
+      const result = await base44.superadmin.resetAdminPassword(admin.id);
+      setCredentialsModal({ title: 'Password Reset', email: result.email, password: result.password });
+    } catch (err) {
+      setActionError(err?.message || 'Failed to reset password');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,6 +84,7 @@ export default function SuperAdminDashboard() {
 
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {loadError && <p className="text-sm text-destructive">{loadError}</p>}
+        {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
         {!isLoading && !loadError && societies.length === 0 && (
           <p className="text-sm text-muted-foreground">No societies yet. Add one to get started.</p>
@@ -69,21 +94,53 @@ export default function SuperAdminDashboard() {
           {societies.map((society) => (
             <Card key={society.id}>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                  {society.name}
-                </CardTitle>
-                {society.city && <p className="text-xs text-muted-foreground">{society.city}</p>}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                      {society.name}
+                    </CardTitle>
+                    {society.city && <p className="text-xs text-muted-foreground mt-1">{society.city}</p>}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setEditingSociety(society)}
+                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
+                      title="Edit society"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSociety(society)}
+                      className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      title="Delete society"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {society.admins.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No admins yet</p>
                 ) : (
-                  <ul className="space-y-1">
+                  <ul className="space-y-2">
                     {society.admins.map((a) => (
-                      <li key={a.id} className="text-sm">
-                        <span className="font-medium">{a.full_name}</span>
-                        <span className="text-muted-foreground"> — {a.email}</span>
+                      <li key={a.id} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="min-w-0">
+                          <span className="font-medium">{a.full_name}</span>
+                          <span className="text-muted-foreground"> — {a.email}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleResetPassword(a)}
+                          className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
+                          title="Reset password"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -104,10 +161,21 @@ export default function SuperAdminDashboard() {
       </main>
 
       {showAddSociety && (
-        <AddSocietyModal
+        <SocietyFormModal
           onClose={() => setShowAddSociety(false)}
-          onCreated={() => {
+          onSaved={() => {
             setShowAddSociety(false);
+            loadSocieties();
+          }}
+        />
+      )}
+
+      {editingSociety && (
+        <SocietyFormModal
+          society={editingSociety}
+          onClose={() => setEditingSociety(null)}
+          onSaved={() => {
+            setEditingSociety(null);
             loadSocieties();
           }}
         />
@@ -119,27 +187,28 @@ export default function SuperAdminDashboard() {
           onClose={() => setShowAddAdmin(null)}
           onCreated={(creds) => {
             setShowAddAdmin(null);
-            setCreatedCredentials(creds);
+            setCredentialsModal({ title: 'Admin Created', ...creds });
             loadSocieties();
           }}
         />
       )}
 
-      {createdCredentials && (
+      {credentialsModal && (
         <CredentialsModal
-          credentials={createdCredentials}
-          onClose={() => setCreatedCredentials(null)}
+          credentials={credentialsModal}
+          onClose={() => setCredentialsModal(null)}
         />
       )}
     </div>
   );
 }
 
-function AddSocietyModal({ onClose, onCreated }) {
-  const [name, setName] = useState('');
-  const [city, setCity] = useState('');
-  const [address, setAddress] = useState('');
-  const [totalFlats, setTotalFlats] = useState('');
+function SocietyFormModal({ society, onClose, onSaved }) {
+  const isEdit = !!society;
+  const [name, setName] = useState(society?.name || '');
+  const [city, setCity] = useState(society?.city || '');
+  const [address, setAddress] = useState(society?.address || '');
+  const [totalFlats, setTotalFlats] = useState(society?.total_flats ?? '');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -149,13 +218,18 @@ function AddSocietyModal({ onClose, onCreated }) {
     if (!name.trim()) { setError('Society name is required'); return; }
     setIsSubmitting(true);
     try {
-      await base44.superadmin.createSociety({
+      const payload = {
         name: name.trim(),
         city: city.trim(),
         address: address.trim(),
         total_flats: totalFlats ? Number(totalFlats) : null,
-      });
-      onCreated();
+      };
+      if (isEdit) {
+        await base44.superadmin.updateSociety(society.id, payload);
+      } else {
+        await base44.superadmin.createSociety(payload);
+      }
+      onSaved();
     } catch (err) {
       setError(err?.message || 'Something went wrong');
     } finally {
@@ -166,7 +240,7 @@ function AddSocietyModal({ onClose, onCreated }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
       <div className="bg-card w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Add Society</h2>
+        <h2 className="text-lg font-semibold">{isEdit ? 'Edit Society' : 'Add Society'}</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
             <Label>Name *</Label>
@@ -188,7 +262,7 @@ function AddSocietyModal({ onClose, onCreated }) {
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
             <Button type="submit" className="flex-1" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create'}
+              {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create'}
             </Button>
           </div>
         </form>
@@ -270,7 +344,7 @@ function CredentialsModal({ credentials, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
       <div className="bg-card w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Admin Created</h2>
+        <h2 className="text-lg font-semibold">{credentials.title || 'Credentials'}</h2>
         <p className="text-sm text-muted-foreground">
           Share these login details with them directly — there's no automatic invite email in this setup.
         </p>
@@ -278,7 +352,7 @@ function CredentialsModal({ credentials, onClose }) {
           <p><span className="text-muted-foreground">Email:</span> <span className="font-medium">{credentials.email}</span></p>
           <p><span className="text-muted-foreground">Temporary password:</span> <span className="font-medium">{credentials.password}</span></p>
         </div>
-        <p className="text-xs text-muted-foreground">They'll be required to change this password on first login.</p>
+        <p className="text-xs text-muted-foreground">They'll be required to change this password on next login.</p>
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={handleCopy}>
             {copied ? <Check className="w-4 h-4 mr-1.5" /> : <Copy className="w-4 h-4 mr-1.5" />}
