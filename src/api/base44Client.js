@@ -149,8 +149,8 @@ const superadmin = {
   async createAdmin(data) {
     return request('/superadmin/admins', { method: 'POST', body: data });
   },
-  async resetAdminPassword(id) {
-    return request(`/superadmin/admins/${id}/reset-password`, { method: 'POST' });
+  async resetAdminPassword(id, societyId) {
+    return request(`/superadmin/admins/${id}/reset-password`, { method: 'POST', body: { society_id: societyId } });
   },
 };
 

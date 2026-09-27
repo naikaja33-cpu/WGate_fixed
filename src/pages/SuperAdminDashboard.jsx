@@ -47,11 +47,11 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const handleResetPassword = async (admin) => {
+  const handleResetPassword = async (admin, society) => {
     setActionError('');
     if (!window.confirm(`Reset the password for ${admin.full_name || admin.email}? Their current password will stop working immediately.`)) return;
     try {
-      const result = await base44.superadmin.resetAdminPassword(admin.id);
+      const result = await base44.superadmin.resetAdminPassword(admin.id, society.id);
       setCredentialsModal({ title: 'Password Reset', email: result.email, password: result.password });
     } catch (err) {
       setActionError(err?.message || 'Failed to reset password');
@@ -135,7 +135,7 @@ export default function SuperAdminDashboard() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleResetPassword(a)}
+                          onClick={() => handleResetPassword(a, society)}
                           className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
                           title="Reset password"
                         >
