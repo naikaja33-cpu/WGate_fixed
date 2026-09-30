@@ -32,17 +32,15 @@ const AuthenticatedApp = () => {
   }
 
   // Not signed in yet: show the local login screen for every route.
-  
+    if (!isAuthenticated || !user) {
+    return (
+      <Routes>
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="*" element={<Login />} />
+      </Routes>
+    );
+  }
    
-
-  if (user.role === 'superadmin') {
-  return (
-    <Routes>
-      <Route path="/superadmin/*" element={<SuperAdminDashboard />} />
-      <Route path="*" element={<Navigate to="/superadmin" replace />} />
-    </Routes>
-  );
-}
 
   // Force a password change before anything else if the account still
   // has its original/temporary password.
