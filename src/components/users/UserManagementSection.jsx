@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { toast } from 'sonner';
 import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,27 +29,11 @@ export default function UserManagementSection() {
     queryClient.invalidateQueries({ queryKey: ['all-users'] });
   };
 
-  const setApproval = async (member, status) => {
-    if (status === 'rejected' && !window.confirm(`Reject the registration from ${member.full_name || member.email}?`)) return;
-    try {
-      await base44.entities.User.update(member.id, {
-        approval_status: status,
-        is_verified: status === 'approved',
-      });
-      toast.success(status === 'approved' ? 'Owner approved' : 'Registration rejected');
-      queryClient.invalidateQueries({ queryKey: ['all-users'] });
-    } catch (err) {
-      toast.error(err?.message || 'Could not update the registration');
-    }
-  };
-
   const handleSaved = () => {
     setShowModal(false);
     setEditingMember(null);
     queryClient.invalidateQueries({ queryKey: ['all-users'] });
   };
-
-  const pendingCount = members.filter(m => m.approval_status === 'pending').length;
 
   const filtered = members.filter(m => {
     const q = search.toLowerCase();
@@ -60,7 +43,7 @@ export default function UserManagementSection() {
       m.full_name?.toLowerCase().includes(q) ||
       m.flat_number?.toLowerCase().includes(q)
     );
-  }).sort((a, b) => Number(b.approval_status === 'pending') - Number(a.approval_status === 'pending'));
+  });
 
   return (
     <div className="space-y-3">
@@ -73,12 +56,6 @@ export default function UserManagementSection() {
           <Plus className="w-4 h-4 mr-1" /> Invite
         </Button>
       </div>
-
-      {pendingCount > 0 && (
-        <p className="text-sm rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2">
-          {pendingCount} owner registration{pendingCount === 1 ? '' : 's'} awaiting your approval.
-        </p>
-      )}
 
       <Input
         placeholder="Search by name, email or flat..."
@@ -101,8 +78,6 @@ export default function UserManagementSection() {
               member={m}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              onApprove={(mem) => setApproval(mem, 'approved')}
-              onReject={(mem) => setApproval(mem, 'rejected')}
             />
           ))}
         </div>

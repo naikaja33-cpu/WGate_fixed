@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Shield, ChevronRight, ArrowLeft } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import { Input } from '@/components/ui/input';
-import { Link } from 'react-router-dom';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
@@ -65,7 +64,6 @@ export default function Login() {
         icon={Shield}
         title="WGATE"
         subtitle="Select your society to sign in"
-        footer={<>New flat owner? <Link to="/owner-onboarding" className="underline">Register here</Link></>}
       >
         <div className="space-y-3">
           {societiesLoading && (
