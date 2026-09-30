@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Shield, ChevronRight, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Shield, ChevronRight, ArrowLeft } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { base44 } from '@/api/base44Client';
 
@@ -15,7 +15,6 @@ export default function Login() {
   const [societiesLoading, setSocietiesLoading] = useState(true);
   const [societiesError, setSocietiesError] = useState('');
   const [selectedSociety, setSelectedSociety] = useState(null);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,13 +37,6 @@ export default function Login() {
 
   const chooseSociety = (society) => {
     setSelectedSociety(society);
-    setIsSuperAdmin(false);
-    setStep('credentials');
-  };
-
-  const chooseSuperAdmin = () => {
-    setSelectedSociety(null);
-    setIsSuperAdmin(true);
     setStep('credentials');
   };
 
@@ -58,7 +50,7 @@ export default function Login() {
     setError('');
     setIsSubmitting(true);
     try {
-      await login(email.trim(), password, isSuperAdmin ? undefined : selectedSociety?.id);
+      await login(email.trim(), password, selectedSociety?.id);
     } catch (err) {
       setError(err?.message || 'Invalid email or password');
     } finally {
@@ -102,17 +94,6 @@ export default function Login() {
               <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
             </button>
           ))}
-
-          <div className="pt-4 border-t border-border mt-4">
-            <button
-              type="button"
-              onClick={chooseSuperAdmin}
-              className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground py-2"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              Super Admin Login
-            </button>
-          </div>
         </div>
       </AuthLayout>
     );
@@ -120,9 +101,9 @@ export default function Login() {
 
   return (
     <AuthLayout
-      icon={isSuperAdmin ? ShieldCheck : Shield}
-      title={isSuperAdmin ? 'Super Admin' : 'WGATE'}
-      subtitle={isSuperAdmin ? 'Sign in to manage societies' : selectedSociety?.name}
+      icon={Shield}
+      title="WGATE"
+      subtitle={selectedSociety?.name}
     >
       <button
         type="button"
@@ -130,7 +111,7 @@ export default function Login() {
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
       >
         <ArrowLeft className="w-4 h-4" />
-        {isSuperAdmin ? 'Choose a society instead' : 'Change society'}
+        Change society
       </button>
 
       <form onSubmit={handleSubmit} className="space-y-4">
