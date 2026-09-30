@@ -5,6 +5,7 @@ import { HashRouter as Router, Route, Routes, Navigate } from 'react-router-dom'
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
+import SuperAdminLogin from '@/pages/SuperAdminLogin';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Visitors from '@/pages/Visitors';
@@ -31,14 +32,16 @@ const AuthenticatedApp = () => {
   }
 
   // Not signed in yet: show the local login screen for every route.
-  if (!isAuthenticated || !user) {
+  
+    if (!isAuthenticated || !user) {
     return (
       <Routes>
-        <Route path="*" element={<Login />} />
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        
+        <Route path="*" element={<Navigate to="/superadmin" replace />} />
       </Routes>
     );
   }
-
   // Force a password change before anything else if the account still
   // has its original/temporary password.
   if (user.must_change_password) {
