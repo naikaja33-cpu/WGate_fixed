@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { User, Pencil, Trash2 } from 'lucide-react';
+import { User, Pencil, Trash2, Check, X } from 'lucide-react';
 
 const roleColors = {
   admin: 'bg-purple-100 text-purple-700 border-purple-200',
@@ -16,7 +16,10 @@ const roleLabels = {
   guard: 'Security',
 };
 
-export default function UserManagementCard({ member, onEdit, onDelete }) {
+export default function UserManagementCard({ member, onEdit, onDelete, onApprove, onReject }) {
+  const isPending = member.approval_status === 'pending';
+  const isRejected = member.approval_status === 'rejected';
+
   return (
     <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3 hover:shadow-sm transition-all">
       <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
@@ -28,8 +31,37 @@ export default function UserManagementCard({ member, onEdit, onDelete }) {
         {member.flat_number && (
           <p className="text-xs text-muted-foreground">Flat {member.flat_number}</p>
         )}
+        {member.phone && isPending && (
+          <p className="text-xs text-muted-foreground">{member.phone}</p>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
+        {isPending && (
+          <Badge className="text-xs border bg-amber-100 text-amber-700 border-amber-200">Pending</Badge>
+        )}
+        {isRejected && (
+          <Badge className="text-xs border bg-red-100 text-red-700 border-red-200">Rejected</Badge>
+        )}
+        {(isPending || isRejected) && onApprove && (
+          <button
+            onClick={() => onApprove(member)}
+            title="Approve"
+            aria-label={`Approve ${member.full_name || member.email}`}
+            className="text-muted-foreground hover:text-emerald-600 transition-colors"
+          >
+            <Check className="w-4 h-4" />
+          </button>
+        )}
+        {isPending && onReject && (
+          <button
+            onClick={() => onReject(member)}
+            title="Reject"
+            aria-label={`Reject ${member.full_name || member.email}`}
+            className="text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
         <Badge className={`text-xs border capitalize ${roleColors[member.role] || roleColors.resident}`}>
           {roleLabels[member.role] || member.role}
         </Badge>
