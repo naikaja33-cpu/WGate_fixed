@@ -143,8 +143,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             </Select>
           </div>
 
-          {isEdit && (
-             <div className="space-y-1.5">
+           <div className="space-y-1.5">
             <Label className="text-xs">Flat Number</Label>
             <Input
               placeholder="e.g. A-101"
@@ -152,7 +151,6 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
               onChange={e => setFlatNumber(e.target.value)}
             />
           </div>
-          )}
 
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
