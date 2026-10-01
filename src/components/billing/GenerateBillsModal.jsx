@@ -1,17 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format, addDays } from 'date-fns';
+import { wgate } from '@/api/wgateClient';
 
 const DEFAULT_LINE_ITEMS = [
   { label: 'Maintenance Charge', amount: 2000 },
   { label: 'Water Charge', amount: 300 },
   { label: 'Sinking Fund', amount: 200 },
 ];
-
-const FLATS = ['A-101','A-102','A-103','B-201','B-202','B-203','C-301','C-302','C-303'];
 
 export default function GenerateBillsModal({ onGenerate, onClose, isGenerating }) {
   const now = new Date();
@@ -23,7 +22,30 @@ export default function GenerateBillsModal({ onGenerate, onClose, isGenerating }
   const [monthLabel, setMonthLabel] = useState(defaultLabel);
   const [dueDate, setDueDate] = useState(defaultDue);
   const [lineItems, setLineItems] = useState(DEFAULT_LINE_ITEMS);
-  const [selectedFlats, setSelectedFlats] = useState(FLATS);
+
+  // Flats come from the society's real members (tenants / owners with a flat number).
+  const [flats, setFlats] = useState([]);
+  const [flatsLoading, setFlatsLoading] = useState(true);
+  const [flatsError, setFlatsError] = useState('');
+  const [selectedFlats, setSelectedFlats] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    wgate.flats.list()
+      .then((list) => {
+        if (cancelled) return;
+        const sorted = [...list].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        setFlats(sorted);
+        setSelectedFlats(sorted); // all selected by default, as before
+      })
+      .catch(() => {
+        if (!cancelled) setFlatsError('Could not load flats. Please close this window and try again.');
+      })
+      .finally(() => {
+        if (!cancelled) setFlatsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const total = lineItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
@@ -93,26 +115,45 @@ export default function GenerateBillsModal({ onGenerate, onClose, isGenerating }
 
         <div className="space-y-2">
           <Label className="text-xs">Select Flats ({selectedFlats.length} selected)</Label>
-          <div className="flex flex-wrap gap-2">
-            {FLATS.map(flat => (
-              <button key={flat} onClick={() => toggleFlat(flat)}
-                className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                  selectedFlats.includes(flat)
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-border text-muted-foreground hover:border-primary'
-                }`}>
-                {flat}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setSelectedFlats(FLATS)} className="text-xs text-primary">Select All</button>
-            <span className="text-muted-foreground text-xs">·</span>
-            <button onClick={() => setSelectedFlats([])} className="text-xs text-muted-foreground">Clear</button>
-          </div>
+
+          {flatsLoading && (
+            <p className="text-xs text-muted-foreground py-2">Loading flats...</p>
+          )}
+
+          {flatsError && (
+            <p className="text-xs text-destructive py-2">{flatsError}</p>
+          )}
+
+          {!flatsLoading && !flatsError && flats.length === 0 && (
+            <p className="text-xs text-muted-foreground py-2">
+              No flats found. Add tenants or owners with a flat number in Members first.
+            </p>
+          )}
+
+          {flats.length > 0 && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {flats.map(flat => (
+                  <button key={flat} onClick={() => toggleFlat(flat)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                      selectedFlats.includes(flat)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:border-primary'
+                    }`}>
+                    {flat}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setSelectedFlats(flats)} className="text-xs text-primary">Select All</button>
+                <span className="text-muted-foreground text-xs">·</span>
+                <button onClick={() => setSelectedFlats([])} className="text-xs text-muted-foreground">Clear</button>
+              </div>
+            </>
+          )}
         </div>
 
-        <Button onClick={handleGenerate} disabled={isGenerating || selectedFlats.length === 0} className="w-full">
+        <Button onClick={handleGenerate} disabled={isGenerating || flatsLoading || selectedFlats.length === 0} className="w-full">
           {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : `Generate ${selectedFlats.length} Bills`}
         </Button>
       </div>
