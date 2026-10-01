@@ -11,6 +11,7 @@ import Dashboard from '@/pages/Dashboard';
 import Visitors from '@/pages/Visitors';
 import ServiceTickets from '@/pages/ServiceTickets';
 import Profile from '@/pages/Profile';
+import Members from '@/pages/Members';
 import Billing from '@/pages/Billing';
 import ForceChangePassword from '@/pages/ForceChangePassword';
 import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
@@ -63,6 +64,7 @@ const AuthenticatedApp = () => {
         <Route path="/Billing" element={<Billing />} />
         <Route path="/NoticeBoard" element={<NoticeBoard />} />
         <Route path="/Profile" element={<Profile />} />
+        <Route path="/Members" element={<Members />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

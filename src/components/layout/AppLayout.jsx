@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Wrench, User, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, Wrench, User,UserCog, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
@@ -12,6 +12,7 @@ const navItems = {
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
+    { path: '/Members', icon: UserCog, label: 'Members' },
     { path: '/Profile', icon: User, label: 'Profile' },
   ],
   tenant: [
@@ -97,7 +98,7 @@ export default function AppLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all ${
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all ${
                   isActive
                     ? 'text-primary bg-accent'
                     : 'text-muted-foreground hover:text-foreground'

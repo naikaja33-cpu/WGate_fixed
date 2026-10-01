@@ -7,7 +7,7 @@ import VisitorCard from '@/components/visitors/VisitorCard';
 import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Link } from 'react-router-dom';
-import UserManagementSection from '@/components/users/UserManagementSection';
+
 import MenuSettingsPanel from '@/components/settings/MenuSettingsPanel';
 
 export default function Dashboard() {
@@ -104,7 +104,15 @@ export default function Dashboard() {
         </div>
       )}
 
-      {isAdmin && <UserManagementSection />}
+            {isAdmin && (
+        <Link
+          to="/Members"
+          className="flex items-center justify-between bg-card rounded-2xl border border-border p-4 hover:shadow-sm transition-all"
+        >
+          <span className="font-medium text-sm">Manage society members</span>
+          <span className="text-xs text-primary font-medium">Open →</span>
+        </Link>
+      )}
       {isAdmin && <MenuSettingsPanel />}
     </div>
   );
