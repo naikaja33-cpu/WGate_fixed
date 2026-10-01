@@ -22,7 +22,8 @@ export default function Billing() {
     queryKey: ['bills'],
     queryFn: () => {
       if (isAdmin) return wgate.entities.MaintenanceBill.list('-created_date', 200);
-      return wgate.entities.MaintenanceBill.filter({ resident_email: user.email }, '-created_date', 50);
+      
+            return wgate.entities.MaintenanceBill.filter({ flat_number: user.flat_number }, '-created_date', 50);
     },
   });
 
