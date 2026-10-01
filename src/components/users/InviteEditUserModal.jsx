@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 
 export default function InviteEditUserModal({ member, onClose, onSaved }) {
   const isEdit = !!member;
@@ -24,13 +24,12 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
     setIsLoading(true);
     try {
       if (isEdit) {
-        await base44.entities.User.update(member.id, { role, flat_number: flatNumber, phone });
+        await wgate.entities.User.update(member.id, { role, flat_number: flatNumber, phone });
         onSaved();
       } else {
-        const created = await base44.users.inviteUser(email.trim(), role, {
+        const created = await wgate.users.inviteUser(email.trim(), role, {
           full_name: name.trim() || undefined,
           phone: phone.trim() || undefined,
-          flat_number: flatNumber.trim() || undefined,
         });
         // Show the credentials so the admin can share them — there's no
         // email service in this local/self-hosted setup, so this is the
@@ -45,8 +44,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
 
   const handleCopy = async () => {
     if (!invited) return;
-    const text = `Email: ${invited.email}\nPassword: ${invited.password}` +
-      (flatNumber.trim() ? `\nFlat: ${flatNumber.trim()}` : '');
+    const text = `Email: ${invited.email}\nPassword: ${invited.password}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -76,9 +74,6 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
 
           <div className="bg-muted rounded-xl p-3 space-y-1 text-sm">
             <p><span className="text-muted-foreground">Email:</span> <span className="font-medium">{invited.email}</span></p>
-            {flatNumber.trim() && (
-              <p><span className="text-muted-foreground">Flat:</span> <span className="font-medium">{flatNumber.trim()}</span></p>
-            )}
             <p><span className="text-muted-foreground">Temporary password:</span> <span className="font-medium">{invited.password}</span></p>
           </div>
 
@@ -147,14 +142,16 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">Flat Number</Label>
-            <Input
-              placeholder="e.g. A-101"
-              value={flatNumber}
-              onChange={e => setFlatNumber(e.target.value)}
-            />
-          </div>
+          {isEdit && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Flat Number</Label>
+              <Input
+                placeholder="e.g. A-101"
+                value={flatNumber}
+                onChange={e => setFlatNumber(e.target.value)}
+              />
+            </div>
+          )}
 
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { Plus } from 'lucide-react';
@@ -22,13 +22,13 @@ export default function ServiceTickets() {
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['tickets'],
     queryFn: () => {
-      if (isAdmin || isGuard) return base44.entities.ServiceTicket.list('-created_date', 100);
-      return base44.entities.ServiceTicket.filter({ resident_email: user.email }, '-created_date', 50);
+      if (isAdmin || isGuard) return wgate.entities.ServiceTicket.list('-created_date', 100);
+      return wgate.entities.ServiceTicket.filter({ resident_email: user.email }, '-created_date', 50);
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.ServiceTicket.create(data),
+    mutationFn: (data) => wgate.entities.ServiceTicket.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       setShowForm(false);
@@ -36,7 +36,7 @@ export default function ServiceTickets() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ServiceTicket.update(id, data),
+    mutationFn: ({ id, data }) => wgate.entities.ServiceTicket.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tickets'] }),
   });
 

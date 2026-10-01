@@ -701,7 +701,7 @@ app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
   res.json({ success: true, user: publicUser(updated) });
 }));
 
-/* Invite a member (local replacement for base44.users.inviteUser) */
+/* Invite a member */
 app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });

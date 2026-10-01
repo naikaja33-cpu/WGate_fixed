@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ export default function UserManagementSection() {
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['all-users'],
-    queryFn: () => base44.entities.User.list('-created_date', 200),
+    queryFn: () => wgate.entities.User.list('-created_date', 200),
   });
 
   const handleEdit = (member) => {
@@ -25,7 +25,7 @@ export default function UserManagementSection() {
 
   const handleDelete = async (member) => {
     if (!window.confirm(`Remove ${member.full_name || member.email} from the app?`)) return;
-    await base44.entities.User.delete(member.id);
+    await wgate.entities.User.delete(member.id);
     queryClient.invalidateQueries({ queryKey: ['all-users'] });
   };
 

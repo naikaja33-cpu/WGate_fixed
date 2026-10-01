@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { Plus, Pin, Trash2, Megaphone, BookOpen, Calendar, Wrench, FileText } from 'lucide-react';
@@ -18,12 +18,12 @@ export default function NoticeBoard() {
 
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['notices', user?.society_id],
-    queryFn: () => base44.entities.Notice.filter({ society_id: user?.society_id }, '-created_date', 100),
+    queryFn: () => wgate.entities.Notice.filter({ society_id: user?.society_id }, '-created_date', 100),
     enabled: !!user?.society_id,
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Notice.create({
+    mutationFn: (data) => wgate.entities.Notice.create({
       ...data,
       society_id: user.society_id,
       society_name: user.society_name,
@@ -36,12 +36,12 @@ export default function NoticeBoard() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Notice.delete(id),
+    mutationFn: (id) => wgate.entities.Notice.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notices'] }),
   });
 
   const togglePinMutation = useMutation({
-    mutationFn: ({ id, is_pinned }) => base44.entities.Notice.update(id, { is_pinned: !is_pinned }),
+    mutationFn: ({ id, is_pinned }) => wgate.entities.Notice.update(id, { is_pinned: !is_pinned }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notices'] }),
   });
 

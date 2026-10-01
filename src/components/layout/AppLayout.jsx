@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Wrench, User, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useState, useEffect } from 'react';
@@ -54,7 +54,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (!user?.society_id || role === 'admin') return;
-    base44.entities.SocietySettings.filter({ society_id: user.society_id }).then(results => {
+    wgate.entities.SocietySettings.filter({ society_id: user.society_id }).then(results => {
       if (results.length > 0 && results[0].enabled_menus) {
         setEnabledMenus(results[0].enabled_menus);
       }

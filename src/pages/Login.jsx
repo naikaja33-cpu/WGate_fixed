@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 
 export default function Login() {
   const { login } = useAuth();
@@ -23,7 +23,7 @@ export default function Login() {
 
   useEffect(() => {
     let cancelled = false;
-    base44.publicApi.societies.list()
+    wgate.publicApi.societies.list()
       .then((list) => {
         if (cancelled) return;
         setSocieties([...list].sort((a, b) => a.name.localeCompare(b.name)));

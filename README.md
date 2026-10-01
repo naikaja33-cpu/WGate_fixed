@@ -1,39 +1,35 @@
-**Welcome to your Base44 project** 
+# WGate — Society Management System
 
-**About**
+A multi-tenant society/apartment-complex management app: visitor check-in,
+service tickets, notices, billing, and member management. Each society's
+data lives in its own Postgres schema, managed under a super admin who
+creates societies and their first admin accounts.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+## Stack
 
-This project contains everything you need to run your app locally.
+- **Frontend:** React + Vite, Tailwind, shadcn/ui, HashRouter
+- **Backend:** Node/Express (`server/wgate-server.mjs`), plain REST API
+- **Database:** PostgreSQL — one schema per society, plus a shared schema
+  for the society directory, super admin accounts, and sessions
+- **Auth:** local email/password, no external provider
+- **Mobile:** Android app via Capacitor (`android/` folder)
 
-**Edit the code in your local development environment**
+## Local development
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+1. `npm install`
+2. Create `.env.local` with a Postgres connection string (a free
+   [Neon](https://neon.tech) project works well):
+   ```
+   DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+   ```
+3. `npm run dev` — starts the backend and Vite dev server together at
+   http://localhost:5173
 
-**Prerequisites:** 
+On first boot against an empty database, the backend seeds:
+- A demo society ("Green Valley Residency") with admin/owner/tenant/guard
+  accounts — see `server/README-local.md` for credentials
+- A super admin account (`superadmin@wgate.local`) — reachable at the
+  hidden `/superadmin-login` route, not linked from the normal login page
 
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
-```
-
-Run the app: `npm run dev`
-
-**Publish your changes**
-
-Open [Base44.com](http://Base44.com) and click on Publish.
-
-**Docs & Support**
-
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+See `server/README-local.md` for full details on the data model, API
+routes, deployment (Render + GitHub Pages), and the Android build.

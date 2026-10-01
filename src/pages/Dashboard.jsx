@@ -1,5 +1,5 @@
 import { useAuth } from '@/lib/AuthContext';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useQuery } from '@tanstack/react-query';
 import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, IndianRupee, Bell } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
@@ -17,15 +17,15 @@ export default function Dashboard() {
 
   const { data: notices = [] } = useQuery({
     queryKey: ['notices-dashboard', user?.society_id],
-    queryFn: () => base44.entities.Notice.filter({ society_id: user?.society_id }, '-created_date', 3),
+    queryFn: () => wgate.entities.Notice.filter({ society_id: user?.society_id }, '-created_date', 3),
     enabled: !!user?.society_id,
   });
 
   const { data: visitors = [] } = useQuery({
     queryKey: ['visitors-dashboard', user?.flat_number],
     queryFn: () => {
-      if (isAdmin) return base44.entities.Visitor.list('-created_date', 50);
-      return base44.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', 20);
+      if (isAdmin) return wgate.entities.Visitor.list('-created_date', 50);
+      return wgate.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', 20);
     },
     enabled: !!user,
   });
@@ -33,8 +33,8 @@ export default function Dashboard() {
   const { data: tickets = [] } = useQuery({
     queryKey: ['tickets-dashboard'],
     queryFn: () => {
-      if (isAdmin) return base44.entities.ServiceTicket.list('-created_date', 50);
-      return base44.entities.ServiceTicket.filter({ resident_email: user.email }, '-created_date', 20);
+      if (isAdmin) return wgate.entities.ServiceTicket.list('-created_date', 50);
+      return wgate.entities.ServiceTicket.filter({ resident_email: user.email }, '-created_date', 20);
     },
   });
 

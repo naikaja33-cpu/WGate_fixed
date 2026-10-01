@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -21,13 +21,13 @@ export default function Billing() {
   const { data: bills = [], isLoading } = useQuery({
     queryKey: ['bills'],
     queryFn: () => {
-      if (isAdmin) return base44.entities.MaintenanceBill.list('-created_date', 200);
-      return base44.entities.MaintenanceBill.filter({ resident_email: user.email }, '-created_date', 50);
+      if (isAdmin) return wgate.entities.MaintenanceBill.list('-created_date', 200);
+      return wgate.entities.MaintenanceBill.filter({ resident_email: user.email }, '-created_date', 50);
     },
   });
 
   const generateMutation = useMutation({
-    mutationFn: (records) => base44.entities.MaintenanceBill.bulkCreate(records),
+    mutationFn: (records) => wgate.entities.MaintenanceBill.bulkCreate(records),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       setShowGenerate(false);
@@ -35,7 +35,7 @@ export default function Billing() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.MaintenanceBill.update(id, data),
+    mutationFn: ({ id, data }) => wgate.entities.MaintenanceBill.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] });
       setMarkingBill(null);

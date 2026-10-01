@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -20,7 +20,7 @@ export default function MenuSettingsPanel() {
 
   useEffect(() => {
     if (!user?.society_id) return;
-    base44.entities.SocietySettings.filter({ society_id: user.society_id }).then(results => {
+    wgate.entities.SocietySettings.filter({ society_id: user.society_id }).then(results => {
       if (results.length > 0) {
         setSettingsId(results[0].id);
         setEnabled(results[0].enabled_menus ?? ALL_MENUS.map(m => m.key));
@@ -33,9 +33,9 @@ export default function MenuSettingsPanel() {
     setEnabled(next);
     setSaving(true);
     if (settingsId) {
-      await base44.entities.SocietySettings.update(settingsId, { enabled_menus: next });
+      await wgate.entities.SocietySettings.update(settingsId, { enabled_menus: next });
     } else {
-      const created = await base44.entities.SocietySettings.create({ society_id: user.society_id, enabled_menus: next });
+      const created = await wgate.entities.SocietySettings.create({ society_id: user.society_id, enabled_menus: next });
       setSettingsId(created.id);
     }
     setSaving(false);

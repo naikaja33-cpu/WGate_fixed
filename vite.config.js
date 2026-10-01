@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Local development config: no Base44 hosted plugin/proxy, no hosted
+// Local development config: no WGate hosted plugin/proxy, no hosted
 // authentication. The dev server proxies /api to the local Express
 // backend started by `npm run dev` (see server/wgate-server.mjs).
 export default defineConfig({

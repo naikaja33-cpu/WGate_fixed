@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 
 export default function SuperAdminDashboard() {
@@ -23,7 +23,7 @@ export default function SuperAdminDashboard() {
     setIsLoading(true);
     setLoadError('');
     try {
-      const list = await base44.superadmin.listSocieties();
+      const list = await wgate.superadmin.listSocieties();
       setSocieties(list);
     } catch (err) {
       setLoadError(err?.message || 'Failed to load societies');
@@ -40,7 +40,7 @@ export default function SuperAdminDashboard() {
     setActionError('');
     if (!window.confirm(`Delete "${society.name}"? This cannot be undone.`)) return;
     try {
-      await base44.superadmin.deleteSociety(society.id);
+      await wgate.superadmin.deleteSociety(society.id);
       loadSocieties();
     } catch (err) {
       setActionError(err?.message || 'Failed to delete society');
@@ -51,7 +51,7 @@ export default function SuperAdminDashboard() {
     setActionError('');
     if (!window.confirm(`Reset the password for ${admin.full_name || admin.email}? Their current password will stop working immediately.`)) return;
     try {
-      const result = await base44.superadmin.resetAdminPassword(admin.id, society.id);
+      const result = await wgate.superadmin.resetAdminPassword(admin.id, society.id);
       setCredentialsModal({ title: 'Password Reset', email: result.email, password: result.password });
     } catch (err) {
       setActionError(err?.message || 'Failed to reset password');
@@ -225,9 +225,9 @@ function SocietyFormModal({ society, onClose, onSaved }) {
         total_flats: totalFlats ? Number(totalFlats) : null,
       };
       if (isEdit) {
-        await base44.superadmin.updateSociety(society.id, payload);
+        await wgate.superadmin.updateSociety(society.id, payload);
       } else {
-        await base44.superadmin.createSociety(payload);
+        await wgate.superadmin.createSociety(payload);
       }
       onSaved();
     } catch (err) {
@@ -284,7 +284,7 @@ function AddAdminModal({ societyId, onClose, onCreated }) {
     if (!email.trim()) { setError('Email is required'); return; }
     setIsSubmitting(true);
     try {
-      const created = await base44.superadmin.createAdmin({
+      const created = await wgate.superadmin.createAdmin({
         email: email.trim(),
         full_name: fullName.trim() || undefined,
         phone: phone.trim() || undefined,

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
@@ -30,7 +30,7 @@ export function NotificationProvider({ children }) {
     const isResident = role === 'tenant' || role === 'owner';
 
     // Visitor subscription — notify resident when a visitor checks in for their flat
-    const unsubVisitor = base44.entities.Visitor.subscribe((event) => {
+    const unsubVisitor = wgate.entities.Visitor.subscribe((event) => {
       if (event.type !== 'create') return;
       const v = event.data;
 
@@ -45,7 +45,7 @@ export function NotificationProvider({ children }) {
     });
 
     // Service ticket subscription — notify on status update
-    const unsubTicket = base44.entities.ServiceTicket.subscribe((event) => {
+    const unsubTicket = wgate.entities.ServiceTicket.subscribe((event) => {
       if (event.type !== 'update') return;
       const t = event.data;
 
@@ -64,7 +64,7 @@ export function NotificationProvider({ children }) {
     });
 
     // Also subscribe to visitor status updates (approval/rejection)
-    const unsubVisitorUpdate = base44.entities.Visitor.subscribe((event) => {
+    const unsubVisitorUpdate = wgate.entities.Visitor.subscribe((event) => {
       if (event.type !== 'update') return;
       const v = event.data;
       if (!v.status || v.status === 'pending') return;

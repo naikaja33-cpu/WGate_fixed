@@ -1,5 +1,5 @@
 {
-  "name": "base44-app",
+  "name": "wgate",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -55,7 +55,6 @@
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cmdk": "^1.0.0",
     "cors": "^2.8.6",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",

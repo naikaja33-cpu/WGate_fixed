@@ -4,7 +4,7 @@ import AuthLayout from '@/components/AuthLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 
 export default function ForceChangePassword() {
@@ -34,7 +34,7 @@ export default function ForceChangePassword() {
 
     setIsSubmitting(true);
     try {
-      const result = await base44.auth.changePassword(currentPassword, newPassword);
+      const result = await wgate.auth.changePassword(currentPassword, newPassword);
       // Apply the updated user from the response if present (fast path),
       // but always also independently re-fetch /auth/me as a robust
       // fallback — this guarantees the app picks up the cleared

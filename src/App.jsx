@@ -5,14 +5,13 @@ import { HashRouter as Router, Route, Routes, Navigate } from 'react-router-dom'
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
-import SuperAdminLogin from '@/pages/SuperAdminLogin';
 import Login from '@/pages/Login';
+import SuperAdminLogin from '@/pages/SuperAdminLogin';
 import Dashboard from '@/pages/Dashboard';
 import Visitors from '@/pages/Visitors';
 import ServiceTickets from '@/pages/ServiceTickets';
 import Profile from '@/pages/Profile';
 import Billing from '@/pages/Billing';
-import Onboarding from '@/pages/Onboarding';
 import ForceChangePassword from '@/pages/ForceChangePassword';
 import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
 import NoticeBoard from '@/pages/NoticeBoard';
@@ -20,7 +19,7 @@ import { NotificationProvider } from '@/components/notifications/NotificationPro
 import { Toaster as SonnerToaster } from 'sonner';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isAuthenticated, user, checkAppState } = useAuth();
+  const { isLoadingAuth, isAuthenticated, user } = useAuth();
 
   // Show loading spinner while checking the local session
   if (isLoadingAuth) {
@@ -32,7 +31,7 @@ const AuthenticatedApp = () => {
   }
 
   // Not signed in yet: show the local login screen for every route.
-    if (!isAuthenticated || !user) {
+  if (!isAuthenticated || !user) {
     return (
       <Routes>
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
@@ -40,7 +39,6 @@ const AuthenticatedApp = () => {
       </Routes>
     );
   }
-   
 
   // Force a password change before anything else if the account still
   // has its original/temporary password.
@@ -52,11 +50,6 @@ const AuthenticatedApp = () => {
   // their own dashboard instead of the normal onboarding/app flow.
   if (user.role === 'superadmin') {
     return <SuperAdminDashboard />;
-  }
-
-  // Show onboarding for new users who haven't selected a society
-  if (!user.society_id) {
-    return <Onboarding onComplete={checkAppState} />;
   }
 
   // Render the main app

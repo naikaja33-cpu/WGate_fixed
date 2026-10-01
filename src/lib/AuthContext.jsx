@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 
 const AuthContext = createContext();
 
@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
   const checkUserAuth = useCallback(async () => {
     setIsLoadingAuth(true);
     try {
-      const currentUser = await base44.auth.me();
+      const currentUser = await wgate.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthError(null);
@@ -43,14 +43,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password, societyId) => {
     setAuthError(null);
-    const loggedInUser = await base44.auth.login(email, password, societyId);
+    const loggedInUser = await wgate.auth.login(email, password, societyId);
     setUser(loggedInUser);
     setIsAuthenticated(true);
     return loggedInUser;
   };
 
   const logout = (shouldRedirect = true) => {
-    base44.auth.logout();
+    wgate.auth.logout();
     setUser(null);
     setIsAuthenticated(false);
     setAuthError(null);

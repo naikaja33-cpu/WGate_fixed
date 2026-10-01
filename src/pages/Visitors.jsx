@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { Plus, Filter } from 'lucide-react';
@@ -23,14 +23,14 @@ export default function Visitors() {
   const { data: visitors = [], isLoading } = useQuery({
     queryKey: ['visitors'],
     queryFn: () => {
-      if (isAdmin) return base44.entities.Visitor.list('-created_date', 100);
-      if (isGuard) return base44.entities.Visitor.list('-created_date', 100);
-      return base44.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', 50);
+      if (isAdmin) return wgate.entities.Visitor.list('-created_date', 100);
+      if (isGuard) return wgate.entities.Visitor.list('-created_date', 100);
+      return wgate.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', 50);
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Visitor.create(data),
+    mutationFn: (data) => wgate.entities.Visitor.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['visitors'] });
       setShowForm(false);
@@ -38,7 +38,7 @@ export default function Visitors() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Visitor.update(id, data),
+    mutationFn: ({ id, data }) => wgate.entities.Visitor.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['visitors'] });
       queryClient.invalidateQueries({ queryKey: ['visitors-dashboard'] });

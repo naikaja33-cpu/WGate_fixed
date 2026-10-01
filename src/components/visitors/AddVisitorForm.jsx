@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { X } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { wgate } from '@/api/wgateClient';
 
 const OTHER_FLAT = '__other__';
 
@@ -25,7 +25,7 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
 
   useEffect(() => {
     let cancelled = false;
-    base44.flats.list()
+    wgate.flats.list()
       .then((flats) => {
         if (cancelled) return;
         const sorted = [...flats].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));

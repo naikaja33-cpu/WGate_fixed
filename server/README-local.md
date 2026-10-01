@@ -1,6 +1,6 @@
 # WGate backend
 
-Self-contained local/hosted replacement for the Base44 hosted backend.
+Self-contained local/hosted replacement for the WGate hosted backend.
 No Docker, no separate DB server to install — it connects to a
 PostgreSQL database over the network (recommended: a free Neon project).
 
@@ -65,9 +65,9 @@ database:
 - `GET /api/events` — Server-Sent Events stream used for the realtime
   visitor/ticket notifications in the UI.
 
-This mirrors the subset of the Base44 SDK (`base44.auth.*`,
-`base44.entities.*`, `base44.users.inviteUser`) that the app actually
-uses, via `src/api/base44Client.js`.
+This mirrors the subset of the WGate SDK (`wgate.auth.*`,
+`wgate.entities.*`, `wgate.users.inviteUser`) that the app actually
+uses, via `src/api/wgateClient.js`.
 
 ## Deploying
 
