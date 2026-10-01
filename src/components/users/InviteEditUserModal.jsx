@@ -30,6 +30,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
         const created = await base44.users.inviteUser(email.trim(), role, {
           full_name: name.trim() || undefined,
           phone: phone.trim() || undefined,
+          flat_number: flatNumber.trim() || undefined,
         });
         // Show the credentials so the admin can share them — there's no
         // email service in this local/self-hosted setup, so this is the
@@ -44,7 +45,8 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
 
   const handleCopy = async () => {
     if (!invited) return;
-    const text = `Email: ${invited.email}\nPassword: ${invited.password}`;
+    const text = `Email: ${invited.email}\nPassword: ${invited.password}` +
+      (flatNumber.trim() ? `\nFlat: ${flatNumber.trim()}` : '');
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -74,6 +76,9 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
 
           <div className="bg-muted rounded-xl p-3 space-y-1 text-sm">
             <p><span className="text-muted-foreground">Email:</span> <span className="font-medium">{invited.email}</span></p>
+            {flatNumber.trim() && (
+              <p><span className="text-muted-foreground">Flat:</span> <span className="font-medium">{flatNumber.trim()}</span></p>
+            )}
             <p><span className="text-muted-foreground">Temporary password:</span> <span className="font-medium">{invited.password}</span></p>
           </div>
 
@@ -142,16 +147,14 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             </Select>
           </div>
 
-          {isEdit && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Flat Number</Label>
-              <Input
-                placeholder="e.g. A-101"
-                value={flatNumber}
-                onChange={e => setFlatNumber(e.target.value)}
-              />
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Flat Number</Label>
+            <Input
+              placeholder="e.g. A-101"
+              value={flatNumber}
+              onChange={e => setFlatNumber(e.target.value)}
+            />
+          </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
