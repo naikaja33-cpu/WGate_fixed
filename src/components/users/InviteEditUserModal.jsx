@@ -30,6 +30,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
         const created = await wgate.users.inviteUser(email.trim(), role, {
           full_name: name.trim() || undefined,
           phone: phone.trim() || undefined,
+          flat_number: flatNumber.trim() || undefined,
         });
         // Show the credentials so the admin can share them — there's no
         // email service in this local/self-hosted setup, so this is the
@@ -143,14 +144,14 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
           </div>
 
           {isEdit && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Flat Number</Label>
-              <Input
-                placeholder="e.g. A-101"
-                value={flatNumber}
-                onChange={e => setFlatNumber(e.target.value)}
-              />
-            </div>
+             <div className="space-y-1.5">
+            <Label className="text-xs">Flat Number</Label>
+            <Input
+              placeholder="e.g. A-101"
+              value={flatNumber}
+              onChange={e => setFlatNumber(e.target.value)}
+            />
+          </div>
           )}
 
           {error && <p className="text-xs text-destructive">{error}</p>}
