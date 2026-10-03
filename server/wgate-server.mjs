@@ -943,6 +943,144 @@ entityRouter.use('/:name', (req, res, next) => {
   }
   next();
 });
+/* ------------------------------------------------------------------ */
+/* Access rules: who may read / write what                            */
+/* Enforced here on the server, so they can't be bypassed from the   */
+/* browser. They mirror what each screen already allows.             */
+/* ------------------------------------------------------------------ */
+
+const isStaff = (u) => u.role === 'admin' || u.role === 'guard';
+const isResident = (u) => u.role === 'tenant' || u.role === 'owner';
+const flatKey = (v) => String(v ?? '').trim().toLowerCase();
+const sameFlat = (u, r) => !!flatKey(u.flat_number) && flatKey(u.flat_number) === flatKey(r.flat_number);
+const sameEmail = (u, r) => !!u.email && !!r.resident_email && normEmail(u.email) === normEmail(r.resident_email);
+
+// Who may create / edit / delete each entity. Visitor and ServiceTicket have
+// finer rules in authorizeCreate / authorizeUpdate below.
+// Notice includes guards because the Notice Board screen lets them post.
+const WRITE_ROLES = {
+  User: ['admin'],
+  SocietySettings: ['admin'],
+  MaintenanceBill: ['admin'],
+  Notice: ['admin', 'guard'],
+};
+
+function canRead(user, entity, record) {
+  switch (entity) {
+    case 'User': return user.role === 'admin' || record.id === user.id;
+    case 'SocietySettings':
+    case 'Notice': return true;
+    case 'Visitor': return isStaff(user) || sameFlat(user, record);
+    case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
+    case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
+    default: return false;
+  }
+}
+
+function canDelete(user, entity) {
+  return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
+}
+
+const denyWrite = (res, message = 'You do not have permission to do that') => {
+  res.status(403).json({ message });
+  return null;
+};
+
+const pickDefined = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+// Returns the record input to store (sanitized), or null after sending a 403.
+function authorizeCreate(req, res, entity, input) {
+  const user = req.user;
+  const body = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {};
+  if (WRITE_ROLES[entity]) {
+    return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
+  }
+  if (entity === 'Visitor') {
+    if (user.role === 'admin') return body;
+    if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
+    delete body.check_out_time;
+    body.status = 'pending'; // guards cannot pre-approve their own check-ins
+    return body;
+  }
+  if (entity === 'ServiceTicket') {
+    if (user.role === 'admin') return body;
+    if (!isResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
+    return {
+      ...pickDefined(body, ['title', 'description', 'category', 'priority']),
+      flat_number: user.flat_number || body.flat_number,
+      resident_email: user.email, // always the signed-in resident, never someone else
+      status: 'open',
+    };
+  }
+  return denyWrite(res);
+}
+
+// Returns the patch to apply (sanitized), or null after sending a 403.
+function authorizeUpdate(req, res, entity, record, patch) {
+  const user = req.user;
+  const body = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
+  if (WRITE_ROLES[entity]) {
+    return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
+  }
+  if (entity === 'ServiceTicket') {
+    return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
+  }
+  if (entity === 'Visitor') {
+    if (user.role === 'admin') return body;
+    const keys = Object.keys(body);
+    if (user.role === 'guard') {
+      const onlyCheckout = keys.length > 0 && keys.every((k) => k === 'check_out_time');
+      return record.status === 'approved' && onlyCheckout
+        ? body
+        : denyWrite(res, 'Security can only check out approved visitors');
+    }
+    if (isResident(user) && sameFlat(user, record)) {
+      const onlyDecision = keys.length === 1 && keys[0] === 'status' && ['approved', 'rejected'].includes(body.status);
+      return onlyDecision ? body : denyWrite(res, 'You can only approve or reject visitors for your flat');
+    }
+    return denyWrite(res);
+  }
+  return denyWrite(res);
+}
+
+const enforceEntityAccess = wrap(async (req, res, next) => {
+  const entity = req.params.name;
+  const [first] = req.path.split('/').filter(Boolean); // undefined | 'bulk' | <record id>
+
+  if (req.method === 'POST') {
+    if (first === 'bulk') {
+      const items = Array.isArray(req.body) ? req.body : req.body?.items;
+      if (!Array.isArray(items)) return next(); // the route itself returns the 400
+      const allowed = [];
+      for (const item of items) {
+        const input = authorizeCreate(req, res, entity, item);
+        if (!input) return; // 403 already sent
+        allowed.push(input);
+      }
+      req.body = allowed;
+      return next();
+    }
+    const input = authorizeCreate(req, res, entity, req.body);
+    if (!input) return;
+    req.body = input;
+    return next();
+  }
+
+  if (first && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    const record = await getEntityRecord(req.schemaName, entity, first);
+    if (!record) return next(); // the route itself returns the 404
+    if (req.method === 'DELETE') {
+      if (!canDelete(req.user, entity)) return denyWrite(res, 'You do not have permission to delete this');
+      return next();
+    }
+    const patch = authorizeUpdate(req, res, entity, record, req.body);
+    if (!patch) return;
+    req.body = patch;
+  }
+  next();
+});
+entityRouter.use('/:name', enforceEntityAccess);
 function assertUserWriteAllowed(req, res) {
   /* ------------------------------------------------------------------ */
 /* Access rules: who may read / write what                            */
