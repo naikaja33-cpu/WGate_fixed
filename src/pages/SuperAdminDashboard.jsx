@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound,Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -18,7 +19,7 @@ export default function SuperAdminDashboard() {
   const [editingSociety, setEditingSociety] = useState(null); // society object, or null
   const [showAddAdmin, setShowAddAdmin] = useState(null); // society id, or null
   const [credentialsModal, setCredentialsModal] = useState(null); // { title, email, password }
-
+  const [menuSociety, setMenuSociety] = useState(null); // society whose menu access is being edited
   const loadSocieties = async () => {
     setIsLoading(true);
     setLoadError('');
@@ -145,15 +146,16 @@ export default function SuperAdminDashboard() {
                     ))}
                   </ul>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setShowAddAdmin(society.id)}
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1.5" />
-                  Add Admin
-                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowAddAdmin(society.id)}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Add Admin
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setMenuSociety(society)}>
+                    <Menu className="w-3.5 h-3.5 mr-1.5" />
+                    Menu Access
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -192,7 +194,16 @@ export default function SuperAdminDashboard() {
           }}
         />
       )}
-
+      {menuSociety && (
+        <MenuAccessModal
+          society={menuSociety}
+          onClose={() => setMenuSociety(null)}
+          onSaved={() => {
+            setMenuSociety(null);
+            loadSocieties();
+          }}
+        />
+      )}
       {credentialsModal && (
         <CredentialsModal
           credentials={credentialsModal}
@@ -359,6 +370,65 @@ function CredentialsModal({ credentials, onClose }) {
             {copied ? 'Copied' : 'Copy'}
           </Button>
           <Button className="flex-1" onClick={onClose}>Done</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+const ALL_MENUS = [
+  { key: 'Visitors', label: 'Visitors' },
+  { key: 'ServiceTickets', label: 'Service Tickets' },
+  { key: 'NoticeBoard', label: 'Notice Board' },
+  { key: 'Billing', label: 'Billing' },
+];
+
+function MenuAccessModal({ society, onClose, onSaved }) {
+  const [enabled, setEnabled] = useState(society.enabled_menus ?? ALL_MENUS.map((m) => m.key));
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const toggle = (key) =>
+    setEnabled((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const handleSave = async () => {
+    setError('');
+    setIsSaving(true);
+    try {
+      await wgate.superadmin.updateSocietyMenus(society.id, enabled);
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Something went wrong');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-card w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Menu Access</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose which sections {society.name} can use. This applies to its admin and all residents.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {ALL_MENUS.map(({ key, label }) => (
+            <div key={key} className="flex items-center justify-between">
+              <Label className="text-sm font-medium">{label}</Label>
+              <Switch checked={enabled.includes(key)} onCheckedChange={() => toggle(key)} disabled={isSaving} />
+            </div>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button type="button" className="flex-1" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
         </div>
       </div>
     </div>

@@ -53,21 +53,23 @@ export default function AppLayout() {
   const role = user?.role || 'resident';
   const [enabledMenus, setEnabledMenus] = useState(null);
 
-  useEffect(() => {
-    if (!user?.society_id || role === 'admin') return;
+    useEffect(() => {
+    if (!user?.society_id) return;
     wgate.entities.SocietySettings.filter({ society_id: user.society_id }).then(results => {
       if (results.length > 0 && results[0].enabled_menus) {
         setEnabledMenus(results[0].enabled_menus);
       }
     });
-  }, [user?.society_id, role]);
+  }, [user?.society_id]);
 
   const baseItems = navItems[role] || navItems.tenant;
-  // Admin always sees all menus; others respect enabled_menus if set
-  const items = (role === 'admin' || !enabledMenus)
+  // The super admin decides which menus a society can use. This applies to
+  // everyone in the society, including its admin. Home, Profile and Members
+  // are always visible.
+  const ALWAYS_VISIBLE = ['/Dashboard', '/Profile', '/Members'];
+  const items = !enabledMenus
     ? baseItems
-    : baseItems.filter(item => item.path === '/Dashboard' || item.path === '/Profile' || enabledMenus.includes(item.path.replace('/', '')));
-
+    : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">

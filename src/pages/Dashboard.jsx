@@ -8,7 +8,7 @@ import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Link } from 'react-router-dom';
 
-import MenuSettingsPanel from '@/components/settings/MenuSettingsPanel';
+
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -113,7 +113,7 @@ export default function Dashboard() {
           <span className="text-xs text-primary font-medium">Open →</span>
         </Link>
       )}
-      {isAdmin && <MenuSettingsPanel />}
+      
     </div>
   );
 }

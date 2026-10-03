@@ -142,6 +142,9 @@ const superadmin = {
   async deleteSociety(id) {
     return request(`/superadmin/societies/${id}`, { method: 'DELETE' });
   },
+    async updateSocietyMenus(id, enabledMenus) {
+    return request(`/superadmin/societies/${id}/menus`, { method: 'PUT', body: { enabled_menus: enabledMenus } });
+  },
   async createAdmin(data) {
     return request('/superadmin/admins', { method: 'POST', body: data });
   },

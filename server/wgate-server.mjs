@@ -791,7 +791,37 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
   await deleteSocietyRecord(society.id);
   res.json({ success: true });
 }));
+/* Super admin chooses which menu sections a society can use. Stored in that
+   society's own SocietySettings record, which the app already reads. */
+const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing'];
 
+app.put('/api/superadmin/societies/:id/menus', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const menus = req.body?.enabled_menus;
+  if (!Array.isArray(menus) || !menus.every((m) => MENU_KEYS.includes(m))) {
+    return res.status(400).json({ message: `enabled_menus must be a list of: ${MENU_KEYS.join(', ')}` });
+  }
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ message: 'Society not found' });
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+
+  const schemaName = await getSocietySchemaName(society.id);
+  const enabled = [...new Set(menus)];
+  const [existing] = await listEntity(schemaName, 'SocietySettings');
+  if (existing) {
+    await updateEntityRecord(schemaName, 'SocietySettings', existing.id, {
+      ...existing,
+      enabled_menus: enabled,
+      updated_date: nowIso(),
+    });
+  } else {
+    await insertEntityRecord(schemaName, 'SocietySettings', {
+      ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
+      society_id: society.id,
+      enabled_menus: enabled,
+    });
+  }
+  res.json({ success: true, enabled_menus: enabled });
+}));
 app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -830,7 +860,8 @@ app.get('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async 
       .filter((u) => u.role === 'admin')
       .map(publicUser)
       .sort((a, b) => a.full_name.localeCompare(b.full_name));
-    return { ...s, admins };
+        const [settings] = await listEntity(schemaName, 'SocietySettings');
+    return { ...s, admins, enabled_menus: settings?.enabled_menus ?? null };
   }));
   res.json(withAdmins.sort((a, b) => a.name.localeCompare(b.name)));
 }));
@@ -904,7 +935,14 @@ entityRouter.use('/:name', (req, res, next) => {
   }
   next();
 });
-
+// Menu access is controlled by the super admin only. Everyone can read the
+// settings (the nav needs them), but nobody can change them through this API.
+entityRouter.use('/:name', (req, res, next) => {
+  if (req.params.name === 'SocietySettings' && req.method !== 'GET') {
+    return res.status(403).json({ message: 'Menu access is managed by the super admin' });
+  }
+  next();
+});
 function assertUserWriteAllowed(req, res) {
   /* ------------------------------------------------------------------ */
 /* Access rules: who may read / write what                            */
