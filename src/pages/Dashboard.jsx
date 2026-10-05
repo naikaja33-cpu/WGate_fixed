@@ -1,24 +1,29 @@
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery } from '@tanstack/react-query';
-import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, IndianRupee, Bell } from 'lucide-react';
+import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, Bell } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Link } from 'react-router-dom';
-
-
+import { useEnabledMenus } from '@/lib/useEnabledMenus';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const role = user?.role || 'resident';
   const isAdmin = role === 'admin';
 
+  // Sections the super admin has switched off are neither fetched nor shown.
+  const { isEnabled } = useEnabledMenus();
+  const showNotices = isEnabled('NoticeBoard');
+  const showVisitors = isEnabled('Visitors');
+  const showTickets = isEnabled('ServiceTickets');
+
   const { data: notices = [] } = useQuery({
     queryKey: ['notices-dashboard', user?.society_id],
     queryFn: () => wgate.entities.Notice.filter({ society_id: user?.society_id }, '-created_date', 3),
-    enabled: !!user?.society_id,
+    enabled: !!user?.society_id && showNotices,
   });
 
   const { data: visitors = [] } = useQuery({
@@ -27,7 +32,7 @@ export default function Dashboard() {
       if (isAdmin) return wgate.entities.Visitor.list('-created_date', 50);
       return wgate.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', 20);
     },
-    enabled: !!user,
+    enabled: !!user && showVisitors,
   });
 
   const { data: tickets = [] } = useQuery({
@@ -36,6 +41,7 @@ export default function Dashboard() {
       if (isAdmin) return wgate.entities.ServiceTicket.list('-created_date', 50);
       return wgate.entities.ServiceTicket.filter({ resident_email: user.email }, '-created_date', 20);
     },
+    enabled: !!user && showTickets,
   });
 
   const pendingVisitors = visitors.filter(v => v.status === 'pending');
@@ -52,17 +58,27 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard title="Pending Visitors" value={pendingVisitors.length} icon={Users} color="bg-amber-100 text-amber-600" />
-        <StatCard title="Open Tickets" value={openTickets.length} icon={Wrench} color="bg-blue-100 text-blue-600" />
-        <StatCard title="Today's Visitors" value={visitors.filter(v => {
-          if (!v.check_in_time) return false;
-          return new Date(v.check_in_time).toDateString() === new Date().toDateString();
-        }).length} icon={Clock} color="bg-emerald-100 text-emerald-600" />
-        <StatCard title="Resolved" value={tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length} icon={CheckCircle2} color="bg-purple-100 text-purple-600" />
-      </div>
+      {(showVisitors || showTickets) && (
+        <div className="grid grid-cols-2 gap-3">
+          {showVisitors && (
+            <StatCard title="Pending Visitors" value={pendingVisitors.length} icon={Users} color="bg-amber-100 text-amber-600" />
+          )}
+          {showTickets && (
+            <StatCard title="Open Tickets" value={openTickets.length} icon={Wrench} color="bg-blue-100 text-blue-600" />
+          )}
+          {showVisitors && (
+            <StatCard title="Today's Visitors" value={visitors.filter(v => {
+              if (!v.check_in_time) return false;
+              return new Date(v.check_in_time).toDateString() === new Date().toDateString();
+            }).length} icon={Clock} color="bg-emerald-100 text-emerald-600" />
+          )}
+          {showTickets && (
+            <StatCard title="Resolved" value={tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length} icon={CheckCircle2} color="bg-purple-100 text-purple-600" />
+          )}
+        </div>
+      )}
 
-      {notices.length > 0 && (
+      {showNotices && notices.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-foreground flex items-center gap-2">
@@ -77,7 +93,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {pendingVisitors.length > 0 && (
+      {showVisitors && pendingVisitors.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-foreground flex items-center gap-2">
@@ -92,7 +108,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {openTickets.length > 0 && (
+      {showTickets && openTickets.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-foreground">Open Tickets</h2>
@@ -104,7 +120,7 @@ export default function Dashboard() {
         </div>
       )}
 
-            {isAdmin && (
+      {isAdmin && (
         <Link
           to="/Members"
           className="flex items-center justify-between bg-card rounded-2xl border border-border p-4 hover:shadow-sm transition-all"
@@ -113,7 +129,6 @@ export default function Dashboard() {
           <span className="text-xs text-primary font-medium">Open →</span>
         </Link>
       )}
-      
     </div>
   );
 }

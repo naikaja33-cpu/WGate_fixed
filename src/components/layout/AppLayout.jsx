@@ -1,9 +1,11 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+
+import { Outlet, Link, useLocation,Navigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Wrench, User,UserCog, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
-import { wgate } from '@/api/wgateClient';
+//import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
-import { useState, useEffect } from 'react';
+//import { useState, useEffect } from 'react';
+import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
 
 const navItems = {
   admin: [
@@ -51,7 +53,7 @@ export default function AppLayout() {
   const location = useLocation();
   const { user,logout } = useAuth();
   const role = user?.role || 'resident';
-  const [enabledMenus, setEnabledMenus] = useState(null);
+  const { enabledMenus, isLoaded } = useEnabledMenus();
 
     useEffect(() => {
     if (!user?.society_id) return;
@@ -70,6 +72,10 @@ export default function AppLayout() {
   const items = !enabledMenus
     ? baseItems
     : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
+    
+  // A page whose menu is switched off can't be opened by typing its address either.
+  const pageKey = location.pathname.replace('/', '');
+  const isBlocked = !!enabledMenus && MENU_KEYS.includes(pageKey) && !enabledMenus.includes(pageKey);
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">
@@ -88,8 +94,16 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-20">
-        <Outlet />
+            <main className="flex-1 overflow-y-auto pb-20">
+        {!isLoaded ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : isBlocked ? (
+          <Navigate to="/Dashboard" replace />
+        ) : (
+          <Outlet />
+        )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30 safe-area-bottom">

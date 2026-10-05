@@ -795,6 +795,24 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
    society's own SocietySettings record, which the app already reads. */
 const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing'];
 
+// Which entity belongs to which menu section. A switched-off section is
+// blocked on the API too, not just hidden in the nav.
+const MENU_FOR_ENTITY = {
+  Visitor: 'Visitors',
+  ServiceTicket: 'ServiceTickets',
+  Notice: 'NoticeBoard',
+  MaintenanceBill: 'Billing',
+};
+const menuCache = new Map(); // schemaName -> { menus, expires }
+
+async function getEnabledMenus(schemaName) {
+  const hit = menuCache.get(schemaName);
+  if (hit && hit.expires > Date.now()) return hit.menus;
+  const [settings] = await listEntity(schemaName, 'SocietySettings');
+  const menus = Array.isArray(settings?.enabled_menus) ? settings.enabled_menus : null; // null = everything on
+  menuCache.set(schemaName, { menus, expires: Date.now() + 30_000 });
+  return menus;
+}
 app.put('/api/superadmin/societies/:id/menus', requireAuth, requireSuperadmin, wrap(async (req, res) => {
   const menus = req.body?.enabled_menus;
   if (!Array.isArray(menus) || !menus.every((m) => MENU_KEYS.includes(m))) {
@@ -820,6 +838,7 @@ app.put('/api/superadmin/societies/:id/menus', requireAuth, requireSuperadmin, w
       enabled_menus: enabled,
     });
   }
+    menuCache.delete(schemaName); // apply the change immediately
   res.json({ success: true, enabled_menus: enabled });
 }));
 app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (req, res) => {
@@ -943,6 +962,18 @@ entityRouter.use('/:name', (req, res, next) => {
   }
   next();
 });
+
+// Block API access to sections the super admin has switched off for this society.
+entityRouter.use('/:name', wrap(async (req, res, next) => {
+  const menuKey = MENU_FOR_ENTITY[req.params.name];
+  if (menuKey) {
+    const menus = await getEnabledMenus(req.schemaName);
+    if (menus && !menus.includes(menuKey)) {
+      return res.status(403).json({ message: 'This section is not enabled for your society', code: 'menu_disabled' });
+    }
+  }
+  next();
+}));
 /* ------------------------------------------------------------------ */
 /* Access rules: who may read / write what                            */
 /* Enforced here on the server, so they can't be bypassed from the   */
