@@ -54,16 +54,6 @@ export default function AppLayout() {
   const { user,logout } = useAuth();
   const role = user?.role || 'resident';
   const { enabledMenus, isLoaded } = useEnabledMenus();
-
-    useEffect(() => {
-    if (!user?.society_id) return;
-    wgate.entities.SocietySettings.filter({ society_id: user.society_id }).then(results => {
-      if (results.length > 0 && results[0].enabled_menus) {
-        setEnabledMenus(results[0].enabled_menus);
-      }
-    });
-  }, [user?.society_id]);
-
   const baseItems = navItems[role] || navItems.tenant;
   // The super admin decides which menus a society can use. This applies to
   // everyone in the society, including its admin. Home, Profile and Members
