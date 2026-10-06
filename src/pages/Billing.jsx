@@ -10,6 +10,9 @@ import GenerateBillsModal from '@/components/billing/GenerateBillsModal';
 import MarkPaidModal from '@/components/billing/MarkPaidModal';
 import StatCard from '@/components/dashboard/StatCard';
 
+// Compact rupee amounts that keep their precision (2500 -> ₹2.5K, not ₹3k).
+const formatRupees = (amount) =>
+  '₹' + new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 2 }).format(Number(amount) || 0);
 export default function Billing() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -79,8 +82,9 @@ export default function Billing() {
 
       {isAdmin && (
         <div className="grid grid-cols-2 gap-3">
-          <StatCard title="Collected" value={`₹${(totalCollected / 1000).toFixed(0)}k`} icon={TrendingUp} color="bg-emerald-100 text-emerald-600" />
-          <StatCard title="Pending" value={`₹${(totalPending / 1000).toFixed(0)}k`} icon={IndianRupee} color="bg-amber-100 text-amber-600" />
+        <StatCard title="Collected" value={formatRupees(totalCollected)} icon={TrendingUp} color="bg-emerald-100 text-emerald-600" />
+        <StatCard title="Pending" value={formatRupees(totalPending)} icon={IndianRupee} color="bg-amber-100 text-amber-600" />
+          
           <StatCard title="Paid Bills" value={bills.filter(b => b.status === 'paid').length} icon={CheckCircle2} color="bg-blue-100 text-blue-600" />
           <StatCard title="Overdue" value={overdueCount} icon={AlertCircle} color="bg-red-100 text-red-600" />
         </div>
