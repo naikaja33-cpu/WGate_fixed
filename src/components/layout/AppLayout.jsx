@@ -1,10 +1,7 @@
-
-import { Outlet, Link, useLocation,Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Wrench, User,UserCog, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
-//import { wgate } from '@/api/wgateClient';
+import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
+import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
-//import { useState, useEffect } from 'react';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
 
 const navItems = {
@@ -33,14 +30,6 @@ const navItems = {
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
   ],
-  tenant: [
-    { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
-    { path: '/Visitors', icon: Users, label: 'Visitors' },
-    { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
-    { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
-    { path: '/Billing', icon: IndianRupee, label: 'Billing' },
-    { path: '/Profile', icon: User, label: 'Profile' },
-  ],
   guard: [
     { path: '/Visitors', icon: Shield, label: 'Gate' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
@@ -51,9 +40,10 @@ const navItems = {
 
 export default function AppLayout() {
   const location = useLocation();
-  const { user,logout } = useAuth();
+  const { user, logout } = useAuth();
   const role = user?.role || 'resident';
   const { enabledMenus, isLoaded } = useEnabledMenus();
+
   const baseItems = navItems[role] || navItems.tenant;
   // The super admin decides which menus a society can use. This applies to
   // everyone in the society, including its admin. Home, Profile and Members
@@ -62,7 +52,7 @@ export default function AppLayout() {
   const items = !enabledMenus
     ? baseItems
     : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
-    
+
   // A page whose menu is switched off can't be opened by typing its address either.
   const pageKey = location.pathname.replace('/', '');
   const isBlocked = !!enabledMenus && MENU_KEYS.includes(pageKey) && !enabledMenus.includes(pageKey);
@@ -78,13 +68,13 @@ export default function AppLayout() {
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full capitalize">{role}</span>
           <NotificationBell />
-          <button onClick={() =>logout()} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => logout()} className="text-muted-foreground hover:text-foreground transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-            <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto pb-20">
         {!isLoaded ? (
           <div className="flex justify-center py-12">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
