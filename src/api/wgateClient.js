@@ -154,6 +154,9 @@ const superadmin = {
 };
 
 const users = {
+    async resetPassword(id) {
+    return request(`/users/${id}/reset-password`, { method: 'POST' });
+  },
   async inviteUser(email, role = 'tenant', details = {}) {
     return request('/users/invite', {
       method: 'POST',

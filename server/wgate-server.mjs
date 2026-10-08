@@ -728,6 +728,84 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
   res.status(201).json({ ...publicUser(user), initial_password: DEFAULT_INVITE_PASSWORD });
 }));
 
+/* An admin resets a society member's password. A new one-time password is
+   generated, the member must change it at their next sign-in, and every
+   device they were signed in on is signed out. Works with or without email. */
+function passwordResetEmailContent({ name, societyName, email, password }) {
+  const loginUrl = APP_URL ? `${APP_URL}/#/` : '';
+  const subject = 'Your WGate password was reset';
+
+  const text = [
+    `Hello ${name},`,
+    '',
+    `Your society admin reset your WGate password for ${societyName}.`,
+    '',
+    loginUrl ? `Sign in here: ${loginUrl}` : 'Ask your society admin for the WGate sign-in link.',
+    `Email: ${email}`,
+    `Temporary password: ${password}`,
+    '',
+    'You will be asked to choose a new password when you sign in. Any device you were signed in on has been signed out.',
+    "If you didn't expect this, please contact your society admin.",
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html><body style="margin:0;padding:24px;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:28px;">
+    <tr><td>
+      <h2 style="margin:0 0 12px;font-size:20px;">Your password was reset</h2>
+      <p style="margin:0 0 16px;line-height:1.5;">Hello ${escapeHtml(name)}, your society admin reset your WGate password for <strong>${escapeHtml(societyName)}</strong>.</p>
+      <table role="presentation" width="100%" style="background:#f4f5f7;border-radius:8px;padding:14px;margin:0 0 20px;font-size:14px;">
+        <tr><td style="color:#6b7280;padding:2px 0;">Email</td><td style="font-weight:bold;text-align:right;">${escapeHtml(email)}</td></tr>
+        <tr><td style="color:#6b7280;padding:2px 0;">Temporary password</td><td style="font-weight:bold;text-align:right;font-family:Consolas,monospace;">${escapeHtml(password)}</td></tr>
+      </table>
+      ${loginUrl ? `<p style="margin:0 0 20px;"><a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;">Sign in to WGate</a></p>` : ''}
+      <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.5;">You'll be asked to choose a new password when you sign in. Any device you were signed in on has been signed out.</p>
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">If you didn't expect this, please contact your society admin.</p>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  return { subject, html, text };
+}
+
+app.post('/api/users/:id/reset-password', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ message: 'Member not found' });
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ message: 'To change your own password, use your Profile page' });
+  }
+  const target = await getEntityRecord(req.schemaName, 'User', req.params.id);
+  if (!target) return res.status(404).json({ message: 'Member not found' });
+
+  const tempPassword = generateTempPassword();
+  const updated = {
+    ...target,
+    password_hash: hashPassword(tempPassword),
+    must_change_password: true,
+    updated_date: nowIso(),
+  };
+  await updateEntityRecord(req.schemaName, 'User', updated.id, updated);
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [updated.id]); // sign them out everywhere
+
+  // Email is optional: if it isn't set up, the admin simply sees the password on screen.
+  const emailResult = typeof sendEmail === 'function'
+    ? await sendEmail({
+        to: updated.email,
+        ...passwordResetEmailContent({
+          name: updated.full_name || updated.email,
+          societyName: req.society.name,
+          email: updated.email,
+          password: tempPassword,
+        }),
+      })
+    : { ok: false, error: 'Email is not set up on the server' };
+
+  res.json({
+    email: updated.email,
+    password: tempPassword,
+    email_sent: emailResult.ok,
+    email_error: emailResult.ok ? undefined : emailResult.error,
+  });
+}));
 /* ------------------------- super admin routes ------------------------- */
 /* Only a 'superadmin' account can reach these: creating, editing and
    deleting societies (each backed by its own Postgres schema), creating

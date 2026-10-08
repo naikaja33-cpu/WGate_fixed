@@ -1,15 +1,20 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { wgate } from '@/api/wgateClient';
+import { useAuth } from '@/lib/AuthContext';
+import { toast } from 'sonner';
 import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import UserManagementCard from './UserManagementCard';
 import InviteEditUserModal from './InviteEditUserModal';
+import PasswordResetModal from './PasswordResetModal';
 
 export default function UserManagementSection() {
+  const { user } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [resetResult, setResetResult] = useState(null); // { name, email, password, email_sent, email_error }
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
@@ -29,11 +34,38 @@ export default function UserManagementSection() {
     queryClient.invalidateQueries({ queryKey: ['all-users'] });
   };
 
+  const handleResetPassword = async (member) => {
+    const label = member.full_name || member.email;
+    if (!window.confirm(`Reset the password for ${label}? They will be signed out and given a new temporary password.`)) return;
+    try {
+      const result = await wgate.users.resetPassword(member.id);
+      setResetResult({ ...result, name: label });
+    } catch (err) {
+      toast.error(err?.message || 'Could not reset the password');
+    }
+  };
+
+  const setApproval = async (member, status) => {
+    if (status === 'rejected' && !window.confirm(`Reject the registration from ${member.full_name || member.email}?`)) return;
+    try {
+      await wgate.entities.User.update(member.id, {
+        approval_status: status,
+        is_verified: status === 'approved',
+      });
+      toast.success(status === 'approved' ? 'Owner approved' : 'Registration rejected');
+      queryClient.invalidateQueries({ queryKey: ['all-users'] });
+    } catch (err) {
+      toast.error(err?.message || 'Could not update the registration');
+    }
+  };
+
   const handleSaved = () => {
     setShowModal(false);
     setEditingMember(null);
     queryClient.invalidateQueries({ queryKey: ['all-users'] });
   };
+
+  const pendingCount = members.filter(m => m.approval_status === 'pending').length;
 
   const filtered = members.filter(m => {
     const q = search.toLowerCase();
@@ -43,7 +75,7 @@ export default function UserManagementSection() {
       m.full_name?.toLowerCase().includes(q) ||
       m.flat_number?.toLowerCase().includes(q)
     );
-  });
+  }).sort((a, b) => Number(b.approval_status === 'pending') - Number(a.approval_status === 'pending'));
 
   return (
     <div className="space-y-3">
@@ -56,6 +88,12 @@ export default function UserManagementSection() {
           <Plus className="w-4 h-4 mr-1" /> Invite
         </Button>
       </div>
+
+      {pendingCount > 0 && (
+        <p className="text-sm rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2">
+          {pendingCount} owner registration{pendingCount === 1 ? '' : 's'} awaiting your approval.
+        </p>
+      )}
 
       <Input
         placeholder="Search by name, email or flat..."
@@ -78,6 +116,9 @@ export default function UserManagementSection() {
               member={m}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onApprove={(mem) => setApproval(mem, 'approved')}
+              onReject={(mem) => setApproval(mem, 'rejected')}
+              onResetPassword={m.id === user?.id ? undefined : handleResetPassword}
             />
           ))}
         </div>
@@ -88,6 +129,14 @@ export default function UserManagementSection() {
           member={editingMember}
           onClose={() => { setShowModal(false); setEditingMember(null); }}
           onSaved={handleSaved}
+        />
+      )}
+
+      {resetResult && (
+        <PasswordResetModal
+          result={resetResult}
+          memberName={resetResult.name}
+          onClose={() => setResetResult(null)}
         />
       )}
     </div>
