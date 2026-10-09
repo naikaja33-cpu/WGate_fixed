@@ -54,8 +54,10 @@ export default function AppLayout() {
     : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
 
   // A page whose menu is switched off can't be opened by typing its address either.
+  // 
   const pageKey = location.pathname.replace('/', '');
-  const isBlocked = !!enabledMenus && MENU_KEYS.includes(pageKey) && !enabledMenus.includes(pageKey);
+  const normalizedKey = MENU_KEYS.find((k) => k.toLowerCase() === pageKey.toLowerCase());
+  const isBlocked = !!enabledMenus && !!normalizedKey && !enabledMenus.includes(normalizedKey);
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">
