@@ -43,6 +43,13 @@ const PORT = Number(process.env.WGATE_API_PORT || process.env.PORT || 4400);
 const HOST = process.env.WGATE_API_HOST || '0.0.0.0';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const DEFAULT_INVITE_PASSWORD = 'welcome123';
+const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || '';
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
 
 const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice'];
 
@@ -700,7 +707,38 @@ app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
   await updateEntityRecord(req.schemaName, 'User', updated.id, updated);
   res.json({ success: true, user: publicUser(updated) });
 }));
+/* A member who is locked out can request a password reset from the login
+   screen without being signed in. This does NOT reset the password itself —
+   it only files a request for the society's admin to act on, since there is
+   no email/SMS sending configured to verify the requester's identity safely. */
+app.post('/api/auth/forgot-password', wrap(async (req, res) => {
+  const email = normEmail(req.body?.email);
+  const societyId = req.body?.society_id;
+  const genericResponse = { message: 'If that email exists in this society, your admin has been notified.' };
+  if (!email || !societyId) return res.json(genericResponse); // never reveal which part was wrong
 
+  const society = await getSocietyById(societyId);
+  if (!society) return res.json(genericResponse);
+  const schemaName = await getSocietySchemaName(societyId);
+
+  const user = await findUserByEmail(schemaName, email);
+  if (!user || user.disabled) return res.json(genericResponse);
+
+  const existing = await listEntity(schemaName, 'PasswordResetRequest');
+  const alreadyPending = existing.some((r) => r.user_id === user.id && r.status === 'pending');
+  if (!alreadyPending) {
+    await insertEntityRecord(schemaName, 'PasswordResetRequest', baseRecord({
+      created_by: email,
+      created_by_id: user.id,
+      user_id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      society_id: society.id,
+      status: 'pending',
+    }));
+  }
+  res.json(genericResponse);
+}));
 /* Invite a member */
 app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
@@ -805,6 +843,57 @@ app.post('/api/users/:id/reset-password', requireAuth, requireAdmin, requireSoci
     email_sent: emailResult.ok,
     email_error: emailResult.ok ? undefined : emailResult.error,
   });
+}));
+
+/* The admin's queue of self-service "forgot password" requests for this
+   society, and the actions to resolve or dismiss them. */
+app.get('/api/users/reset-requests', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  const all = await listEntity(req.schemaName, 'PasswordResetRequest');
+  const pending = all
+    .filter((r) => r.status === 'pending')
+    .sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+  res.json(pending);
+}));
+
+app.post('/api/users/reset-requests/:id/resolve', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  const request = await getEntityRecord(req.schemaName, 'PasswordResetRequest', req.params.id);
+  if (!request) return res.status(404).json({ message: 'Request not found' });
+
+  const target = await getEntityRecord(req.schemaName, 'User', request.user_id);
+  if (!target) return res.status(404).json({ message: 'That member no longer exists' });
+
+  const tempPassword = generateTempPassword();
+  const updatedUser = {
+    ...target,
+    password_hash: hashPassword(tempPassword),
+    must_change_password: true,
+    updated_date: nowIso(),
+  };
+  await updateEntityRecord(req.schemaName, 'User', updatedUser.id, updatedUser);
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [updatedUser.id]);
+
+  await updateEntityRecord(req.schemaName, 'PasswordResetRequest', request.id, {
+    ...request,
+    status: 'resolved',
+    resolved_by: req.user.email,
+    resolved_date: nowIso(),
+    updated_date: nowIso(),
+  });
+
+  res.json({ email: updatedUser.email, password: tempPassword, name: updatedUser.full_name });
+}));
+
+app.post('/api/users/reset-requests/:id/dismiss', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  const request = await getEntityRecord(req.schemaName, 'PasswordResetRequest', req.params.id);
+  if (!request) return res.status(404).json({ message: 'Request not found' });
+  await updateEntityRecord(req.schemaName, 'PasswordResetRequest', request.id, {
+    ...request,
+    status: 'dismissed',
+    resolved_by: req.user.email,
+    resolved_date: nowIso(),
+    updated_date: nowIso(),
+  });
+  res.json({ success: true });
 }));
 /* ------------------------- super admin routes ------------------------- */
 /* Only a 'superadmin' account can reach these: creating, editing and
@@ -1190,152 +1279,158 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
   next();
 });
 entityRouter.use('/:name', enforceEntityAccess);
+// function assertUserWriteAllowed(req, res) {
+//   /* ------------------------------------------------------------------ */
+// /* Access rules: who may read / write what                            */
+// /* Enforced here on the server, so they can't be bypassed from the   */
+// /* browser. They mirror what each screen already allows.             */
+// /* ------------------------------------------------------------------ */
+
+// const isStaff = (u) => u.role === 'admin' || u.role === 'guard';
+// const isResident = (u) => u.role === 'tenant' || u.role === 'owner';
+// const flatKey = (v) => String(v ?? '').trim().toLowerCase();
+// const sameFlat = (u, r) => !!flatKey(u.flat_number) && flatKey(u.flat_number) === flatKey(r.flat_number);
+// const sameEmail = (u, r) => !!u.email && !!r.resident_email && normEmail(u.email) === normEmail(r.resident_email);
+
+// // Who may create / edit / delete each entity. Visitor and ServiceTicket have
+// // finer rules in authorizeCreate / authorizeUpdate below.
+// // Notice includes guards because the Notice Board screen lets them post.
+// const WRITE_ROLES = {
+//   User: ['admin'],
+//   SocietySettings: ['admin'],
+//   MaintenanceBill: ['admin'],
+//   Notice: ['admin', 'guard'],
+// };
+
+// function canRead(user, entity, record) {
+//   switch (entity) {
+//     case 'User': return user.role === 'admin' || record.id === user.id;
+//     case 'SocietySettings':
+//     case 'Notice': return true;
+//     case 'Visitor': return isStaff(user) || sameFlat(user, record);
+//     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
+//     case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
+//     default: return false;
+//   }
+// }
+
+// function canDelete(user, entity) {
+//   return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
+// }
+
+// const denyWrite = (res, message = 'You do not have permission to do that') => {
+//   res.status(403).json({ message });
+//   return null;
+// };
+
+// const pickDefined = (obj, keys) =>
+//   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+// // Returns the record input to store (sanitized), or null after sending a 403.
+// function authorizeCreate(req, res, entity, input) {
+//   const user = req.user;
+//   const body = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {};
+//   if (WRITE_ROLES[entity]) {
+//     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
+//   }
+//   if (entity === 'Visitor') {
+//     if (user.role === 'admin') return body;
+//     if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
+//     delete body.check_out_time;
+//     body.status = 'pending'; // guards cannot pre-approve their own check-ins
+//     return body;
+//   }
+//   if (entity === 'ServiceTicket') {
+//     if (user.role === 'admin') return body;
+//     if (!isResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
+//     return {
+//       ...pickDefined(body, ['title', 'description', 'category', 'priority']),
+//       flat_number: user.flat_number || body.flat_number,
+//       resident_email: user.email, // always the signed-in resident, never someone else
+//       status: 'open',
+//     };
+//   }
+//   return denyWrite(res);
+// }
+
+// // Returns the patch to apply (sanitized), or null after sending a 403.
+// function authorizeUpdate(req, res, entity, record, patch) {
+//   const user = req.user;
+//   const body = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
+//   if (WRITE_ROLES[entity]) {
+//     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
+//   }
+//   if (entity === 'ServiceTicket') {
+//     return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
+//   }
+//   if (entity === 'Visitor') {
+//     if (user.role === 'admin') return body;
+//     const keys = Object.keys(body);
+//     if (user.role === 'guard') {
+//       const onlyCheckout = keys.length > 0 && keys.every((k) => k === 'check_out_time');
+//       return record.status === 'approved' && onlyCheckout
+//         ? body
+//         : denyWrite(res, 'Security can only check out approved visitors');
+//     }
+//     if (isResident(user) && sameFlat(user, record)) {
+//       const onlyDecision = keys.length === 1 && keys[0] === 'status' && ['approved', 'rejected'].includes(body.status);
+//       return onlyDecision ? body : denyWrite(res, 'You can only approve or reject visitors for your flat');
+//     }
+//     return denyWrite(res);
+//   }
+//   return denyWrite(res);
+// }
+
+// const enforceEntityAccess = wrap(async (req, res, next) => {
+//   const entity = req.params.name;
+//   const [first] = req.path.split('/').filter(Boolean); // undefined | 'bulk' | <record id>
+
+//   if (req.method === 'POST') {
+//     if (first === 'bulk') {
+//       const items = Array.isArray(req.body) ? req.body : req.body?.items;
+//       if (!Array.isArray(items)) return next(); // the route itself returns the 400
+//       const allowed = [];
+//       for (const item of items) {
+//         const input = authorizeCreate(req, res, entity, item);
+//         if (!input) return; // 403 already sent
+//         allowed.push(input);
+//       }
+//       req.body = allowed;
+//       return next();
+//     }
+//     const input = authorizeCreate(req, res, entity, req.body);
+//     if (!input) return;
+//     req.body = input;
+//     return next();
+//   }
+
+//   if (first && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+//     const record = await getEntityRecord(req.schemaName, entity, first);
+//     if (!record) return next(); // the route itself returns the 404
+//     if (req.method === 'DELETE') {
+//       if (!canDelete(req.user, entity)) return denyWrite(res, 'You do not have permission to delete this');
+//       return next();
+//     }
+//     const patch = authorizeUpdate(req, res, entity, record, req.body);
+//     if (!patch) return;
+//     req.body = patch;
+//   }
+//   next();
+// });
+// entityRouter.use('/:name', enforceEntityAccess);
+//   if (req.params.name === 'User' && req.user.role !== 'admin') {
+//     res.status(403).json({ message: 'Only admins can manage users' });
+//     return false;
+//   }
+//   return true;
+// }
 function assertUserWriteAllowed(req, res) {
-  /* ------------------------------------------------------------------ */
-/* Access rules: who may read / write what                            */
-/* Enforced here on the server, so they can't be bypassed from the   */
-/* browser. They mirror what each screen already allows.             */
-/* ------------------------------------------------------------------ */
-
-const isStaff = (u) => u.role === 'admin' || u.role === 'guard';
-const isResident = (u) => u.role === 'tenant' || u.role === 'owner';
-const flatKey = (v) => String(v ?? '').trim().toLowerCase();
-const sameFlat = (u, r) => !!flatKey(u.flat_number) && flatKey(u.flat_number) === flatKey(r.flat_number);
-const sameEmail = (u, r) => !!u.email && !!r.resident_email && normEmail(u.email) === normEmail(r.resident_email);
-
-// Who may create / edit / delete each entity. Visitor and ServiceTicket have
-// finer rules in authorizeCreate / authorizeUpdate below.
-// Notice includes guards because the Notice Board screen lets them post.
-const WRITE_ROLES = {
-  User: ['admin'],
-  SocietySettings: ['admin'],
-  MaintenanceBill: ['admin'],
-  Notice: ['admin', 'guard'],
-};
-
-function canRead(user, entity, record) {
-  switch (entity) {
-    case 'User': return user.role === 'admin' || record.id === user.id;
-    case 'SocietySettings':
-    case 'Notice': return true;
-    case 'Visitor': return isStaff(user) || sameFlat(user, record);
-    case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
-    case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
-    default: return false;
-  }
-}
-
-function canDelete(user, entity) {
-  return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
-}
-
-const denyWrite = (res, message = 'You do not have permission to do that') => {
-  res.status(403).json({ message });
-  return null;
-};
-
-const pickDefined = (obj, keys) =>
-  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
-
-// Returns the record input to store (sanitized), or null after sending a 403.
-function authorizeCreate(req, res, entity, input) {
-  const user = req.user;
-  const body = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {};
-  if (WRITE_ROLES[entity]) {
-    return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
-  }
-  if (entity === 'Visitor') {
-    if (user.role === 'admin') return body;
-    if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
-    delete body.check_out_time;
-    body.status = 'pending'; // guards cannot pre-approve their own check-ins
-    return body;
-  }
-  if (entity === 'ServiceTicket') {
-    if (user.role === 'admin') return body;
-    if (!isResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
-    return {
-      ...pickDefined(body, ['title', 'description', 'category', 'priority']),
-      flat_number: user.flat_number || body.flat_number,
-      resident_email: user.email, // always the signed-in resident, never someone else
-      status: 'open',
-    };
-  }
-  return denyWrite(res);
-}
-
-// Returns the patch to apply (sanitized), or null after sending a 403.
-function authorizeUpdate(req, res, entity, record, patch) {
-  const user = req.user;
-  const body = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
-  if (WRITE_ROLES[entity]) {
-    return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
-  }
-  if (entity === 'ServiceTicket') {
-    return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
-  }
-  if (entity === 'Visitor') {
-    if (user.role === 'admin') return body;
-    const keys = Object.keys(body);
-    if (user.role === 'guard') {
-      const onlyCheckout = keys.length > 0 && keys.every((k) => k === 'check_out_time');
-      return record.status === 'approved' && onlyCheckout
-        ? body
-        : denyWrite(res, 'Security can only check out approved visitors');
-    }
-    if (isResident(user) && sameFlat(user, record)) {
-      const onlyDecision = keys.length === 1 && keys[0] === 'status' && ['approved', 'rejected'].includes(body.status);
-      return onlyDecision ? body : denyWrite(res, 'You can only approve or reject visitors for your flat');
-    }
-    return denyWrite(res);
-  }
-  return denyWrite(res);
-}
-
-const enforceEntityAccess = wrap(async (req, res, next) => {
-  const entity = req.params.name;
-  const [first] = req.path.split('/').filter(Boolean); // undefined | 'bulk' | <record id>
-
-  if (req.method === 'POST') {
-    if (first === 'bulk') {
-      const items = Array.isArray(req.body) ? req.body : req.body?.items;
-      if (!Array.isArray(items)) return next(); // the route itself returns the 400
-      const allowed = [];
-      for (const item of items) {
-        const input = authorizeCreate(req, res, entity, item);
-        if (!input) return; // 403 already sent
-        allowed.push(input);
-      }
-      req.body = allowed;
-      return next();
-    }
-    const input = authorizeCreate(req, res, entity, req.body);
-    if (!input) return;
-    req.body = input;
-    return next();
-  }
-
-  if (first && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-    const record = await getEntityRecord(req.schemaName, entity, first);
-    if (!record) return next(); // the route itself returns the 404
-    if (req.method === 'DELETE') {
-      if (!canDelete(req.user, entity)) return denyWrite(res, 'You do not have permission to delete this');
-      return next();
-    }
-    const patch = authorizeUpdate(req, res, entity, record, req.body);
-    if (!patch) return;
-    req.body = patch;
-  }
-  next();
-});
-entityRouter.use('/:name', enforceEntityAccess);
   if (req.params.name === 'User' && req.user.role !== 'admin') {
     res.status(403).json({ message: 'Only admins can manage users' });
     return false;
   }
   return true;
 }
-
 async function buildRecord(schemaName, entity, input, actor, activeSociety) {
   const record = {
     ...(ENTITY_DEFAULTS[entity] || {}),

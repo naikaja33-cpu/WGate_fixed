@@ -103,7 +103,13 @@ const auth = {
       body: { current_password: currentPassword, new_password: newPassword },
     });
   },
-
+async forgotPassword(email, societyId) {
+    return request('/auth/forgot-password', {
+      method: 'POST',
+      body: { email, society_id: societyId },
+      auth: false,
+    });
+  },
   logout() {
     const token = getToken();
     setToken(null);
@@ -156,6 +162,15 @@ const superadmin = {
 const users = {
     async resetPassword(id) {
     return request(`/users/${id}/reset-password`, { method: 'POST' });
+  },
+  async listResetRequests() {
+    return request('/users/reset-requests');
+  },
+  async resolveResetRequest(id) {
+    return request(`/users/reset-requests/${id}/resolve`, { method: 'POST' });
+  },
+  async dismissResetRequest(id) {
+    return request(`/users/reset-requests/${id}/dismiss`, { method: 'POST' });
   },
   async inviteUser(email, role = 'tenant', details = {}) {
     return request('/users/invite', {
