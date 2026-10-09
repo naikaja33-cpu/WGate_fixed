@@ -21,6 +21,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
   const handleSubmit = async () => {
     setError('');
     if (!email.trim()) { setError('Email is required'); return; }
+    if (phone && phone.length !== 10) { setError('Phone number must be exactly 10 digits'); return; 
     setIsLoading(true);
     try {
       if (isEdit) {
@@ -111,15 +112,18 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             />
           </div>
 
+          
           <div className="space-y-1.5">
             <Label className="text-xs">Contact Number</Label>
             <Input
+              type="tel"
+              inputMode="numeric"
               placeholder="e.g. 9876543210"
               value={phone}
-              onChange={e => setPhone(e.target.value)}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              maxLength={10}
             />
           </div>
-
           <div className="space-y-1.5">
             <Label className="text-xs">Email</Label>
             <Input

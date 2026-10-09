@@ -13,6 +13,7 @@ export default function Profile() {
   const [flat, setFlat] = useState(user?.flat_number || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [saved, setSaved] = useState(false);
+  const [phoneError, setPhoneError] = useState('');
 
   const saveMutation = useMutation({
     mutationFn: (data) => wgate.auth.updateMe(data),
@@ -24,6 +25,11 @@ export default function Profile() {
   });
 
   const handleSave = () => {
+    if (phone && phone.length !== 10) {
+      setPhoneError('Phone number must be exactly 10 digits');
+      return;
+    }
+    setPhoneError('');
     saveMutation.mutate({ flat_number: flat, phone });
   };
 
@@ -64,7 +70,15 @@ export default function Profile() {
             <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Phone className="w-3 h-3" /> Phone
             </Label>
-            <Input placeholder="Phone number" value={phone} onChange={e => setPhone(e.target.value)} />
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="Phone number"
+              value={phone}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              maxLength={10}
+            />
+            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>
 
           <Button onClick={handleSave} className="w-full" disabled={saveMutation.isPending}>

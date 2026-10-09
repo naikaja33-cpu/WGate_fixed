@@ -91,6 +91,7 @@ const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex'
 const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 const normEmail = (email) => String(email || '').trim().toLowerCase();
+const isValidPhone = (phone) => !phone || /^\d{10}$/.test(String(phone));
 
 /* ------------------------------------------------------------------ */
 /* Postgres connection                                                */
@@ -678,6 +679,9 @@ app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
   for (const key of SELF_EDITABLE_FIELDS) {
     if (req.body && Object.prototype.hasOwnProperty.call(req.body, key)) patch[key] = req.body[key];
   }
+  if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
+    return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+  }
   const updated = { ...req.user, ...patch, updated_date: nowIso() };
   await updateEntityRecord(req.schemaName, 'User', updated.id, updated);
   broadcast(req.schemaName, 'User', 'update', updated);
@@ -745,6 +749,9 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
   if (!email) return res.status(400).json({ message: 'Email is required' });
   if (await findUserByEmail(req.schemaName, email)) {
     return res.status(409).json({ message: 'A user with this email already exists in this society' });
+  }
+  if (!isValidPhone(req.body?.phone)) {
+    return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
   }
   const requested = req.body?.role;
   const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) ? requested : 'tenant';
@@ -1195,6 +1202,9 @@ function authorizeCreate(req, res, entity, input) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
   if (entity === 'Visitor') {
+    if (!isValidPhone(body.visitor_phone)) {
+      return denyWrite(res, 'Visitor phone number must be exactly 10 digits');
+    }
     if (user.role === 'admin') return body;
     if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
     delete body.check_out_time;
@@ -1543,6 +1553,9 @@ async function updateHandler(req, res) {
       if (existing && existing.id !== record.id) {
         return res.status(409).json({ message: 'A user with this email already exists' });
       }
+    }
+    if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
+      return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
     }
     if (patch.password) {
       patch.password_hash = hashPassword(patch.password);

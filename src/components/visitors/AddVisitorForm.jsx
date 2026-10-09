@@ -52,6 +52,10 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
       setFlatError('Please select or enter a flat number');
       return;
     }
+    if (form.visitor_phone && form.visitor_phone.length !== 10) {
+      setFlatError(''); // keep the flat-number message area clear if that part was fine
+      return;
+    }
     setFlatError('');
     onSubmit({
       ...form,
@@ -78,9 +82,19 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
             <Input placeholder="Full name" value={form.visitor_name} onChange={e => update('visitor_name', e.target.value)} required />
           </div>
 
-          <div className="space-y-2">
+                    <div className="space-y-2">
             <Label>Phone</Label>
-            <Input placeholder="Phone number" value={form.visitor_phone} onChange={e => update('visitor_phone', e.target.value)} />
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="Phone number"
+              value={form.visitor_phone}
+              onChange={e => update('visitor_phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+              maxLength={10}
+            />
+            {form.visitor_phone && form.visitor_phone.length !== 10 && (
+              <p className="text-xs text-destructive">Phone number must be exactly 10 digits</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
