@@ -21,7 +21,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
   const handleSubmit = async () => {
     setError('');
     if (!email.trim()) { setError('Email is required'); return; }
-    if (phone && phone.length !== 10) { setError('Phone number must be exactly 10 digits'); return; 
+    if (phone && phone.length !== 10) { setError('Phone number must be exactly 10 digits'); return;} 
     setIsLoading(true);
     try {
       if (isEdit) {
