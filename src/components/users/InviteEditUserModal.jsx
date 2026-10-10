@@ -38,10 +38,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
           password: created.initial_password,
           email_sent: created.email_sent,
         });
-        // Show the credentials so the admin can share them — there's no
-        // email service in this local/self-hosted setup, so this is the
-        // only place the new user's temporary password is visible.
-        setInvited({ email: created.email, password: created.initial_password });
+        
       }
     } catch (e) {
       setError(e?.message || 'Something went wrong');
