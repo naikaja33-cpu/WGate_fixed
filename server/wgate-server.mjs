@@ -51,18 +51,29 @@ function escapeHtml(str) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
 }
-let mailTransporter = null;
-function getMailTransporter() {
-  if (mailTransporter) return mailTransporter;
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
-  mailTransporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-  return mailTransporter;
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
+const APPS_SCRIPT_SECRET = process.env.APPS_SCRIPT_SECRET || '';
+
+async function sendEmail({ to, subject, html, text }) {
+  if (!APPS_SCRIPT_URL || !APPS_SCRIPT_SECRET) {
+    return { ok: false, error: 'Email is not configured on the server' };
+  }
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: APPS_SCRIPT_SECRET, to, subject, html, text }),
+      redirect: 'follow',
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      return { ok: false, error: data?.error || `Apps Script responded with ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('[wgate-api] Failed to send email via Apps Script:', err.message);
+    return { ok: false, error: 'Could not send email' };
+  }
 }
 
 async function sendEmail({ to, subject, html, text }) {
