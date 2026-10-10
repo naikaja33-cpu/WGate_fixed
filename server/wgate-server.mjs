@@ -27,6 +27,7 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'node:crypto';
 import pg from 'pg';
+import nodemailer from 'nodemailer';
 
 // dotenv's default `dotenv/config` import only reads a file named
 // `.env`. This project (and the rest of the Vite tooling) uses
@@ -50,7 +51,37 @@ function escapeHtml(str) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
 }
+let mailTransporter = null;
+function getMailTransporter() {
+  if (mailTransporter) return mailTransporter;
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+  mailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+  return mailTransporter;
+}
 
+async function sendEmail({ to, subject, html, text }) {
+  const transporter = getMailTransporter();
+  if (!transporter) return { ok: false, error: 'Email is not configured on the server' };
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to,
+      subject,
+      html,
+      text,
+    });
+    return { ok: true };
+  } catch (err) {
+    console.error('[wgate-api] Failed to send email:', err.message);
+    return { ok: false, error: 'Could not send email' };
+  }
+}
 const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice'];
 
 const ENTITY_DEFAULTS = {
@@ -743,6 +774,40 @@ app.post('/api/auth/forgot-password', wrap(async (req, res) => {
   }
   res.json(genericResponse);
 }));
+function inviteEmailContent({ name, societyName, email, password, role }) {
+  const loginUrl = APP_URL ? `${APP_URL}/#/` : '';
+  const subject = `You've been added to ${societyName} on WGate`;
+
+  const text = [
+    `Hello ${name},`,
+    '',
+    `You've been added to ${societyName} on WGate as a${role === 'admin' ? 'n' : ''} ${role}.`,
+    '',
+    loginUrl ? `Sign in here: ${loginUrl}` : 'Ask your society admin for the WGate sign-in link.',
+    `Email: ${email}`,
+    `Temporary password: ${password}`,
+    '',
+    'You will be asked to choose a new password when you first sign in.',
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html><body style="margin:0;padding:24px;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:28px;">
+    <tr><td>
+      <h2 style="margin:0 0 12px;font-size:20px;">Welcome to ${escapeHtml(societyName)}</h2>
+      <p style="margin:0 0 16px;line-height:1.5;">Hello ${escapeHtml(name)}, you've been added to <strong>${escapeHtml(societyName)}</strong> on WGate as a${role === 'admin' ? 'n' : ''} <strong>${escapeHtml(role)}</strong>.</p>
+      <table role="presentation" width="100%" style="background:#f4f5f7;border-radius:8px;padding:14px;margin:0 0 20px;font-size:14px;">
+        <tr><td style="color:#6b7280;padding:2px 0;">Email</td><td style="font-weight:bold;text-align:right;">${escapeHtml(email)}</td></tr>
+        <tr><td style="color:#6b7280;padding:2px 0;">Temporary password</td><td style="font-weight:bold;text-align:right;font-family:Consolas,monospace;">${escapeHtml(password)}</td></tr>
+      </table>
+      ${loginUrl ? `<p style="margin:0 0 20px;"><a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;">Sign in to WGate</a></p>` : ''}
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">You'll be asked to choose a new password the first time you sign in.</p>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  return { subject, html, text };
+}
 /* Invite a member */
 app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
@@ -770,8 +835,25 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
   };
   await insertEntityRecord(req.schemaName, 'User', user);
   broadcast(req.schemaName, 'User', 'create', user);
-  res.status(201).json({ ...publicUser(user), initial_password: DEFAULT_INVITE_PASSWORD });
+  const emailResult = await sendEmail({
+    to: user.email,
+    ...inviteEmailContent({
+      name: user.full_name,
+      societyName: req.society.name,
+      email: user.email,
+      password: DEFAULT_INVITE_PASSWORD,
+      role: user.role,
+    }),
+  });
+
+  res.status(201).json({
+    ...publicUser(user),
+    initial_password: DEFAULT_INVITE_PASSWORD,
+    email_sent: emailResult.ok,
+    email_error: emailResult.ok ? undefined : emailResult.error,
+  });
 }));
+
 
 /* An admin resets a society member's password. A new one-time password is
    generated, the member must change it at their next sign-in, and every

@@ -28,10 +28,15 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
         await wgate.entities.User.update(member.id, { role, flat_number: flatNumber, phone });
         onSaved();
       } else {
-        const created = await wgate.users.inviteUser(email.trim(), role, {
+    const created = await wgate.users.inviteUser(email.trim(), role, {
           full_name: name.trim() || undefined,
           phone: phone.trim() || undefined,
           flat_number: flatNumber.trim() || undefined,
+        });
+        setInvited({
+          email: created.email,
+          password: created.initial_password,
+          email_sent: created.email_sent,
         });
         // Show the credentials so the admin can share them — there's no
         // email service in this local/self-hosted setup, so this is the
@@ -71,7 +76,9 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Share these login details with them directly — there's no automatic invite email in this setup.
+            {invited.email_sent
+              ? `An email with these login details has been sent to ${invited.email}.`
+              : 'Could not send an email automatically — please share these login details with them directly.'}
           </p>
 
           <div className="bg-muted rounded-xl p-3 space-y-1 text-sm">
