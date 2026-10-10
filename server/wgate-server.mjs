@@ -36,7 +36,10 @@ import pg from 'pg';
 // like Render instead).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, '..', '.env.local') });
-
+console.log('[DEBUG] cwd:', process.cwd());
+console.log('[DEBUG] APPS_SCRIPT_URL:', process.env.APPS_SCRIPT_URL);
+console.log('[DEBUG] APPS_SCRIPT_SECRET set:', !!process.env.APPS_SCRIPT_SECRET);
+console.log('[DEBUG] DATABASE_URL set:', !!process.env.DATABASE_URL);
 const PORT = Number(process.env.WGATE_API_PORT || process.env.PORT || 4400);
 // 0.0.0.0 works for local dev (still reachable via localhost) and is
 // required by most hosting platforms (Render, etc.) which need the
