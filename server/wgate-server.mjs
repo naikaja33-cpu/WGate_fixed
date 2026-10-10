@@ -27,7 +27,7 @@ import express from 'express';
 import cors from 'cors';
 import crypto from 'node:crypto';
 import pg from 'pg';
-import nodemailer from 'nodemailer';
+
 
 // dotenv's default `dotenv/config` import only reads a file named
 // `.env`. This project (and the rest of the Vite tooling) uses
@@ -51,48 +51,54 @@ function escapeHtml(str) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
 }
+// Sends email through your own Gmail via a small Google Apps Script (the "mail relay").
+// It uses normal HTTPS, so it works on Render's free tier (which blocks SMTP).
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
-const APPS_SCRIPT_SECRET = process.env.APPS_SCRIPT_SECRET || '';
+const APPS_SCRIPT_SECRET = process.env.APPS_SCRIPT_SECRET || ''; // must equal RELAY_SECRET in the script
+const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'WGate';
 
+// Returns { ok: true } or { ok: false, error }. Never throws, so an email problem can't break creating an account.
 async function sendEmail({ to, subject, html, text }) {
   if (!APPS_SCRIPT_URL || !APPS_SCRIPT_SECRET) {
     return { ok: false, error: 'Email is not configured on the server' };
   }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000); // the script can take a few seconds to wake up
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const response = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: APPS_SCRIPT_SECRET, to, subject, html, text }),
-      redirect: 'follow',
+      body: JSON.stringify({ secret: APPS_SCRIPT_SECRET, to, subject, html, text, fromName: EMAIL_FROM_NAME }),
+      redirect: 'follow', // Google answers with a redirect to the real result
+      signal: controller.signal,
     });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok) {
-      return { ok: false, error: data?.error || `Apps Script responded with ${res.status}` };
+    const raw = await response.text();
+    let data = null;
+    try { data = JSON.parse(raw); } catch { /* not JSON, handled below */ }
+    if (!response.ok || !data) {
+      console.error(`[wgate-api] Apps Script answered ${response.status} without a JSON result`);
+      return { ok: false, error: 'The email relay did not answer correctly (check APPS_SCRIPT_URL, and that its access is set to "Anyone")' };
+    }
+    if (!data.ok) {
+      console.error(`[wgate-api] Apps Script refused: ${String(data.error).slice(0, 100)}`);
+      return {
+        ok: false,
+        error: data.error === 'Unauthorized'
+          ? 'The email relay rejected the secret (APPS_SCRIPT_SECRET must match RELAY_SECRET in the script)'
+          : `Email relay: ${data.error}`,
+      };
     }
     return { ok: true };
   } catch (err) {
-    console.error('[wgate-api] Failed to send email via Apps Script:', err.message);
-    return { ok: false, error: 'Could not send email' };
+    console.error('[wgate-api] Failed to send email via Apps Script:', err?.name === 'AbortError' ? 'timed out' : err?.message);
+    return { ok: false, error: 'Could not reach the email relay' };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function sendEmail({ to, subject, html, text }) {
-  const transporter = getMailTransporter();
-  if (!transporter) return { ok: false, error: 'Email is not configured on the server' };
-  try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to,
-      subject,
-      html,
-      text,
-    });
-    return { ok: true };
-  } catch (err) {
-    console.error('[wgate-api] Failed to send email:', err.message);
-    return { ok: false, error: 'Could not send email' };
-  }
-}
+
+
 const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice'];
 
 const ENTITY_DEFAULTS = {
@@ -1382,151 +1388,7 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
   next();
 });
 entityRouter.use('/:name', enforceEntityAccess);
-// function assertUserWriteAllowed(req, res) {
-//   /* ------------------------------------------------------------------ */
-// /* Access rules: who may read / write what                            */
-// /* Enforced here on the server, so they can't be bypassed from the   */
-// /* browser. They mirror what each screen already allows.             */
-// /* ------------------------------------------------------------------ */
 
-// const isStaff = (u) => u.role === 'admin' || u.role === 'guard';
-// const isResident = (u) => u.role === 'tenant' || u.role === 'owner';
-// const flatKey = (v) => String(v ?? '').trim().toLowerCase();
-// const sameFlat = (u, r) => !!flatKey(u.flat_number) && flatKey(u.flat_number) === flatKey(r.flat_number);
-// const sameEmail = (u, r) => !!u.email && !!r.resident_email && normEmail(u.email) === normEmail(r.resident_email);
-
-// // Who may create / edit / delete each entity. Visitor and ServiceTicket have
-// // finer rules in authorizeCreate / authorizeUpdate below.
-// // Notice includes guards because the Notice Board screen lets them post.
-// const WRITE_ROLES = {
-//   User: ['admin'],
-//   SocietySettings: ['admin'],
-//   MaintenanceBill: ['admin'],
-//   Notice: ['admin', 'guard'],
-// };
-
-// function canRead(user, entity, record) {
-//   switch (entity) {
-//     case 'User': return user.role === 'admin' || record.id === user.id;
-//     case 'SocietySettings':
-//     case 'Notice': return true;
-//     case 'Visitor': return isStaff(user) || sameFlat(user, record);
-//     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
-//     case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
-//     default: return false;
-//   }
-// }
-
-// function canDelete(user, entity) {
-//   return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
-// }
-
-// const denyWrite = (res, message = 'You do not have permission to do that') => {
-//   res.status(403).json({ message });
-//   return null;
-// };
-
-// const pickDefined = (obj, keys) =>
-//   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
-
-// // Returns the record input to store (sanitized), or null after sending a 403.
-// function authorizeCreate(req, res, entity, input) {
-//   const user = req.user;
-//   const body = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {};
-//   if (WRITE_ROLES[entity]) {
-//     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
-//   }
-//   if (entity === 'Visitor') {
-//     if (user.role === 'admin') return body;
-//     if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
-//     delete body.check_out_time;
-//     body.status = 'pending'; // guards cannot pre-approve their own check-ins
-//     return body;
-//   }
-//   if (entity === 'ServiceTicket') {
-//     if (user.role === 'admin') return body;
-//     if (!isResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
-//     return {
-//       ...pickDefined(body, ['title', 'description', 'category', 'priority']),
-//       flat_number: user.flat_number || body.flat_number,
-//       resident_email: user.email, // always the signed-in resident, never someone else
-//       status: 'open',
-//     };
-//   }
-//   return denyWrite(res);
-// }
-
-// // Returns the patch to apply (sanitized), or null after sending a 403.
-// function authorizeUpdate(req, res, entity, record, patch) {
-//   const user = req.user;
-//   const body = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
-//   if (WRITE_ROLES[entity]) {
-//     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
-//   }
-//   if (entity === 'ServiceTicket') {
-//     return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
-//   }
-//   if (entity === 'Visitor') {
-//     if (user.role === 'admin') return body;
-//     const keys = Object.keys(body);
-//     if (user.role === 'guard') {
-//       const onlyCheckout = keys.length > 0 && keys.every((k) => k === 'check_out_time');
-//       return record.status === 'approved' && onlyCheckout
-//         ? body
-//         : denyWrite(res, 'Security can only check out approved visitors');
-//     }
-//     if (isResident(user) && sameFlat(user, record)) {
-//       const onlyDecision = keys.length === 1 && keys[0] === 'status' && ['approved', 'rejected'].includes(body.status);
-//       return onlyDecision ? body : denyWrite(res, 'You can only approve or reject visitors for your flat');
-//     }
-//     return denyWrite(res);
-//   }
-//   return denyWrite(res);
-// }
-
-// const enforceEntityAccess = wrap(async (req, res, next) => {
-//   const entity = req.params.name;
-//   const [first] = req.path.split('/').filter(Boolean); // undefined | 'bulk' | <record id>
-
-//   if (req.method === 'POST') {
-//     if (first === 'bulk') {
-//       const items = Array.isArray(req.body) ? req.body : req.body?.items;
-//       if (!Array.isArray(items)) return next(); // the route itself returns the 400
-//       const allowed = [];
-//       for (const item of items) {
-//         const input = authorizeCreate(req, res, entity, item);
-//         if (!input) return; // 403 already sent
-//         allowed.push(input);
-//       }
-//       req.body = allowed;
-//       return next();
-//     }
-//     const input = authorizeCreate(req, res, entity, req.body);
-//     if (!input) return;
-//     req.body = input;
-//     return next();
-//   }
-
-//   if (first && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-//     const record = await getEntityRecord(req.schemaName, entity, first);
-//     if (!record) return next(); // the route itself returns the 404
-//     if (req.method === 'DELETE') {
-//       if (!canDelete(req.user, entity)) return denyWrite(res, 'You do not have permission to delete this');
-//       return next();
-//     }
-//     const patch = authorizeUpdate(req, res, entity, record, req.body);
-//     if (!patch) return;
-//     req.body = patch;
-//   }
-//   next();
-// });
-// entityRouter.use('/:name', enforceEntityAccess);
-//   if (req.params.name === 'User' && req.user.role !== 'admin') {
-//     res.status(403).json({ message: 'Only admins can manage users' });
-//     return false;
-//   }
-//   return true;
-// }
 function assertUserWriteAllowed(req, res) {
   if (req.params.name === 'User' && req.user.role !== 'admin') {
     res.status(403).json({ message: 'Only admins can manage users' });
