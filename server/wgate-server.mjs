@@ -1141,9 +1141,11 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
   if (!society) return res.status(404).json({ message: 'Society not found' });
   const schemaName = await getSocietySchemaName(society.id);
   const userCount = await countEntity(schemaName, 'User');
-  if (userCount > 0) {
+  const force = req.query.force === 'true';
+  if (userCount > 0 && !force) {
     return res.status(409).json({
-      message: 'This society still has members. Remove them first before deleting the society.',
+      message: `This society still has ${userCount} member${userCount === 1 ? '' : 's'}. Remove them first, or confirm force delete.`,
+      member_count: userCount,
     });
   }
   await deleteSocietyRecord(society.id);

@@ -62,17 +62,32 @@ export default function SuperAdminDashboard() {
     loadSocieties();
   }, []);
 
-  const handleDeleteSociety = async (society) => {
+   const handleDeleteSociety = async (society) => {
     setActionError('');
     if (!window.confirm(`Delete "${society.name}"? This cannot be undone.`)) return;
     try {
       await wgate.superadmin.deleteSociety(society.id);
       loadSocieties();
     } catch (err) {
+      if (err?.status === 409) {
+        const memberCount = err?.data?.member_count;
+        const confirmForce = window.confirm(
+          `"${society.name}" still has ${memberCount ?? 'some'} member(s). ` +
+          `Force delete anyway? This permanently deletes the society AND all its members, visitors, tickets, notices and bills.`
+        );
+        if (confirmForce) {
+          try {
+            await wgate.superadmin.deleteSociety(society.id, true);
+            loadSocieties();
+          } catch (err2) {
+            setActionError(err2?.message || 'Failed to delete society');
+          }
+        }
+        return;
+      }
       setActionError(err?.message || 'Failed to delete society');
     }
   };
-
   const handleResetPassword = async (admin, society) => {
     setActionError('');
     if (!window.confirm(`Reset the password for ${admin.full_name || admin.email}? Their current password will stop working immediately.`)) return;

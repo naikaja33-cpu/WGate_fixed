@@ -163,8 +163,8 @@ const superadmin = {
   async updateSociety(id, data) {
     return request(`/superadmin/societies/${id}`, { method: 'PATCH', body: data });
   },
-  async deleteSociety(id) {
-    return request(`/superadmin/societies/${id}`, { method: 'DELETE' });
+  async deleteSociety(id, force = false) {
+    return request(`/superadmin/societies/${id}${force ? '?force=true' : ''}`, { method: 'DELETE' });
   },
     async updateSocietyMenus(id, enabledMenus) {
     return request(`/superadmin/societies/${id}/menus`, { method: 'PUT', body: { enabled_menus: enabledMenus } });
