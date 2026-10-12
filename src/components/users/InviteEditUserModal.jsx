@@ -21,6 +21,8 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
   const handleSubmit = async () => {
     setError('');
     if (!email.trim()) { setError('Email is required'); return; }
+    if (!phone.trim()) { setError('Phone number is required'); return; }
+    if (!flatNumber.trim()) { setError('Flat number is required'); return; }
     if (phone && phone.length !== 10) { setError('Phone number must be exactly 10 digits'); return;} 
     setIsLoading(true);
     try {
@@ -118,7 +120,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
 
           
           <div className="space-y-1.5">
-            <Label className="text-xs">Contact Number</Label>
+            <Label className="text-xs">Contact Number<span className="text-destructive">*</span></Label>
             <Input
               type="tel"
               inputMode="numeric"
@@ -152,7 +154,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
           </div>
 
            <div className="space-y-1.5">
-            <Label className="text-xs">Flat Number</Label>
+            <Label className="text-xs">Flat Number<span className="text-destructive">*</span></Label>
             <Input
               placeholder="e.g. A-101"
               value={flatNumber}

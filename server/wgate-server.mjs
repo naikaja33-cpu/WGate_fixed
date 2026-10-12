@@ -835,8 +835,14 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
   if (await findUserByEmail(req.schemaName, email)) {
     return res.status(409).json({ message: 'A user with this email already exists in this society' });
   }
+  if (!String(req.body?.phone || '').trim()) {
+      return res.status(400).json({ message: 'Phone number is required' });
+    }
   if (!isValidPhone(req.body?.phone)) {
     return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+  }
+  if (!String(req.body?.flat_number || '').trim()) {
+      return res.status(400).json({ message: 'Flat number is required' });
   }
   const requested = req.body?.role;
   const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) ? requested : 'tenant';
@@ -1512,8 +1518,19 @@ async function updateHandler(req, res) {
         return res.status(409).json({ message: 'A user with this email already exists' });
       }
     }
-    if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
-      return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+    // if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
+    //   return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+    // }
+    if (patch.phone !== undefined) {
+      if (!String(patch.phone || '').trim()) {
+        return res.status(400).json({ message: 'Phone number is required' });
+      }
+      if (!isValidPhone(patch.phone)) {
+        return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+      }
+    }
+    if (patch.flat_number !== undefined && !String(patch.flat_number || '').trim()) {
+      return res.status(400).json({ message: 'Flat number is required' });
     }
     if (patch.password) {
       patch.password_hash = hashPassword(patch.password);
