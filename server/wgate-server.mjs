@@ -213,6 +213,8 @@ async function initSchema() {
       updated_date TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'trial';`);
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS superadmins (
       id UUID PRIMARY KEY,
@@ -245,6 +247,8 @@ function rowToSociety(row) {
     city: row.city || '',
     address: row.address || '',
     total_flats: row.total_flats,
+    plan: row.plan || 'trial',
+    trial_ends_at: row.trial_ends_at instanceof Date ? row.trial_ends_at.toISOString() : row.trial_ends_at,
     created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
   };
@@ -266,12 +270,12 @@ async function getSocietySchemaName(id) {
   return rows[0]?.schema_name || null;
 }
 
-async function createSocietyRecord({ name, city, address, total_flats }) {
+async function createSocietyRecord({ name, city, address, total_flats,plan, trial_ends_at  }) {
   const id = newId();
   const schemaName = schemaNameForSociety(id);
   await pool.query(
-    `INSERT INTO societies (id, name, city, address, total_flats, schema_name) VALUES ($1,$2,$3,$4,$5,$6)`,
-    [id, name, city || '', address || '', total_flats ?? null, schemaName]
+    `INSERT INTO societies (id, name, city, address, total_flats, schema_name,plan, trial_ends_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [id, name, city || '', address || '', total_flats ?? null, schemaName,plan || 'trial', trial_ends_at || null]
   );
   await ensureSocietySchema(schemaName);
   return getSocietyById(id);
@@ -669,7 +673,79 @@ app.get('/api/public/societies', wrap(async (_req, res) => {
   const societies = await listSocieties();
   res.json(societies.map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats })));
 }));
+/* Self-serve signup: a prospective customer creates their own society +
+   admin account, no superadmin involved. Starts a 14-day trial on
+   whichever plan they picked (billing/enforcement of the plan itself is
+   future work — this just records the choice and the trial window). */
+const PLANS = ['trial', 'starter', 'pro'];
+const TRIAL_DAYS = 14;
 
+app.post('/api/signup', wrap(async (req, res) => {
+  const societyName = String(req.body?.society_name || '').trim();
+  const city = String(req.body?.city || '').trim();
+  const address = String(req.body?.address || '').trim();
+  const totalFlats = req.body?.total_flats ? Number(req.body.total_flats) : null;
+  const plan = PLANS.includes(req.body?.plan) ? req.body.plan : 'trial';
+
+  const adminName = String(req.body?.admin_name || '').trim();
+  const email = normEmail(req.body?.admin_email);
+  const password = req.body?.admin_password;
+  const phone = req.body?.admin_phone;
+
+  if (!societyName) return res.status(400).json({ message: 'Society name is required' });
+  if (!adminName) return res.status(400).json({ message: 'Your name is required' });
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+  if (!String(phone || '').trim()) return res.status(400).json({ message: 'Phone number is required' });
+  if (!isValidPhone(phone)) return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const society = await createSocietyRecord({
+    name: societyName,
+    city,
+    address,
+    total_flats: totalFlats,
+    plan,
+    trial_ends_at: trialEndsAt,
+  });
+  const schemaName = await getSocietySchemaName(society.id);
+
+  const admin = baseRecord({
+    email,
+    password_hash: hashPassword(password),
+    full_name: adminName,
+    role: 'admin',
+    flat_number: 'Office',
+    phone,
+    society_id: society.id,
+    society_name: society.name,
+    disabled: false,
+    is_verified: true,
+    must_change_password: false, // they just chose this password themselves
+  });
+  await insertEntityRecord(schemaName, 'User', admin);
+
+  await pruneSessions();
+  const token = await createSession(admin.id, society.id);
+
+  // Best-effort welcome email — a failure here must never block signup.
+  const emailResult = await sendEmail({
+    to: admin.email,
+    subject: `Welcome to WGate, ${society.name}`,
+    text: `Your ${TRIAL_DAYS}-day trial has started.\n\nSociety: ${society.name}\nPlan: ${plan}\nTrial ends: ${new Date(trialEndsAt).toLocaleDateString()}\n\nLog in any time at ${APP_URL || 'your WGate URL'} with ${email}.`,
+    html: `<p>Your ${TRIAL_DAYS}-day trial has started.</p><p><b>Society:</b> ${escapeHtml(society.name)}<br/><b>Plan:</b> ${escapeHtml(plan)}<br/><b>Trial ends:</b> ${new Date(trialEndsAt).toLocaleDateString()}</p><p>Log in any time with <b>${escapeHtml(email)}</b>.</p>`,
+  });
+
+  res.status(201).json({
+    token,
+    user: publicUser(admin),
+    society,
+    email_sent: emailResult.ok,
+  });
+}));
 /* ---------------------------- auth ---------------------------- */
 
 app.post('/api/auth/login', wrap(async (req, res) => {

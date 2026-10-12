@@ -18,6 +18,7 @@ import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
 import NoticeBoard from '@/pages/NoticeBoard';
 import { NotificationProvider } from '@/components/notifications/NotificationProvider';
 import { Toaster as SonnerToaster } from 'sonner';
+import Signup from '@/pages/Signup';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -36,6 +37,7 @@ const AuthenticatedApp = () => {
     return (
       <Routes>
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="*" element={<Login />} />
       </Routes>
     );
