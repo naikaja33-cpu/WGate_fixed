@@ -25,14 +25,18 @@ export default function Signup() {
   const [submitted, setSubmitted] = useState(null); // { society } once signed up
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-
+// Digits only, capped at 10 — matches the backend's isValidPhone check.
+  const setPhone = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm((f) => ({ ...f, phone: digits }));
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.society_name.trim()) return setError('Society name is required');
     if (!form.email.trim()) return setError('Email is required');
     if (!form.password || form.password.length < 6) return setError('Password must be at least 6 characters');
-
+    if (form.phone && form.phone.length !== 10) return setError('Phone number must be exactly 10 digits');
     setIsSubmitting(true);
     try {
       const result = await wgate.auth.signup({
@@ -115,9 +119,18 @@ export default function Signup() {
             <Label htmlFor="signup-email">Email *</Label>
             <Input id="signup-email" type="email" autoComplete="username" value={form.email} onChange={setField('email')} required />
           </div>
-          <div className="space-y-1.5">
+                    <div className="space-y-1.5">
             <Label htmlFor="signup-phone">Phone</Label>
-            <Input id="signup-phone" value={form.phone} onChange={setField('phone')} />
+            <Input
+              id="signup-phone"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={10}
+              value={form.phone}
+              onChange={setPhone}
+              placeholder="10-digit mobile number"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="signup-password">Password *</Label>
