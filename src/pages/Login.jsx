@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { Link } from 'react-router-dom';
-import { Shield, ChevronRight, ArrowLeft } from 'lucide-react';
 export default function Login() {
   const { login } = useAuth();
 
