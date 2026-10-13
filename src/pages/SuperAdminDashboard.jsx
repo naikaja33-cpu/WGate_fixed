@@ -8,11 +8,38 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 
+// function PlanBadge({ society }) {
+//   if (!society.plan) return null;
+//   const isTrial = society.plan === 'trial';
+//   let trialInfo = null;
+//   if (isTrial && society.trial_ends_at) {
+//     const daysLeft = Math.ceil((new Date(society.trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24));
+//     trialInfo = daysLeft < 0
+//       ? { label: 'Trial expired', className: 'bg-destructive/10 text-destructive' }
+//       : daysLeft <= 3
+//       ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
+//       : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
+//   }
+//   return (
+//     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+//       <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
+//         {society.plan}
+//       </span>
+//       {trialInfo && (
+//         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
+//           {trialInfo.label}
+//         </span>
+//       )}
+//     </div>
+//   );
+// }
 function PlanBadge({ society }) {
   if (!society.plan) return null;
-  const isTrial = society.plan === 'trial';
+  // The countdown applies to any plan with a trial window set, not only a
+  // plan literally named "trial" — every signup gets a 14-day trial no
+  // matter which plan they ultimately land on.
   let trialInfo = null;
-  if (isTrial && society.trial_ends_at) {
+  if (society.trial_ends_at) {
     const daysLeft = Math.ceil((new Date(society.trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24));
     trialInfo = daysLeft < 0
       ? { label: 'Trial expired', className: 'bg-destructive/10 text-destructive' }
@@ -28,6 +55,11 @@ function PlanBadge({ society }) {
       {trialInfo && (
         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
           {trialInfo.label}
+        </span>
+      )}
+      {society.approved === false && (
+        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">
+          Pending approval
         </span>
       )}
     </div>
@@ -86,6 +118,15 @@ export default function SuperAdminDashboard() {
         return;
       }
       setActionError(err?.message || 'Failed to delete society');
+    }
+  };
+    const handleApproveSociety = async (society) => {
+    setActionError('');
+    try {
+      await wgate.superadmin.approveSociety(society.id);
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to approve society');
     }
   };
   const handleResetPassword = async (admin, society) => {
@@ -186,6 +227,12 @@ export default function SuperAdminDashboard() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {society.approved === false && (
+                  <Button size="sm" className="w-full" onClick={() => handleApproveSociety(society)}>
+                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                    Approve Society
+                  </Button>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowAddAdmin(society.id)}>

@@ -128,6 +128,11 @@ async forgotPassword(email, societyId) {
       auth: false,
     });
   },
+    // Self-service society signup. Does not log the caller in — the new
+  // society starts unapproved, so there's no token to receive yet.
+  async signup(data) {
+    return request('/signup', { method: 'POST', body: data, auth: false });
+  },
   logout() {
     const token = getToken();
     setToken(null);
@@ -165,6 +170,9 @@ const superadmin = {
   },
   async deleteSociety(id, force = false) {
     return request(`/superadmin/societies/${id}${force ? '?force=true' : ''}`, { method: 'DELETE' });
+  },
+    async approveSociety(id) {
+    return request(`/superadmin/societies/${id}/approve`, { method: 'POST' });
   },
     async updateSocietyMenus(id, enabledMenus) {
     return request(`/superadmin/societies/${id}/menus`, { method: 'PUT', body: { enabled_menus: enabledMenus } });

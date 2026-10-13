@@ -47,6 +47,8 @@ const PORT = Number(process.env.WGATE_API_PORT || process.env.PORT || 4400);
 const HOST = process.env.WGATE_API_HOST || '0.0.0.0';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const DEFAULT_INVITE_PASSWORD = 'welcome123';
+// How long a society's trial runs once the super admin approves it.
+const TRIAL_DAYS = 14;
 const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || '';
 
 function escapeHtml(str) {
@@ -213,8 +215,13 @@ async function initSchema() {
       updated_date TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+    // Self-service signup support: a society created via /api/signup starts
+  // unapproved and nobody in it can log in until a super admin approves it.
+  // Approving stamps approved_at and starts the trial window.
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'trial';`);
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false;`);
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS superadmins (
       id UUID PRIMARY KEY,
@@ -240,6 +247,19 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
 }
 
+// function rowToSociety(row) {
+//   return {
+//     id: row.id,
+//     name: row.name,
+//     city: row.city || '',
+//     address: row.address || '',
+//     total_flats: row.total_flats,
+//     plan: row.plan || 'trial',
+//     trial_ends_at: row.trial_ends_at instanceof Date ? row.trial_ends_at.toISOString() : row.trial_ends_at,
+//     created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
+//     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
+//   };
+// }
 function rowToSociety(row) {
   return {
     id: row.id,
@@ -249,11 +269,12 @@ function rowToSociety(row) {
     total_flats: row.total_flats,
     plan: row.plan || 'trial',
     trial_ends_at: row.trial_ends_at instanceof Date ? row.trial_ends_at.toISOString() : row.trial_ends_at,
+    approved: row.approved === true,
+    approved_at: row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at,
     created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
   };
 }
-
 async function listSocieties() {
   const { rows } = await pool.query('SELECT * FROM societies ORDER BY name');
   return rows.map(rowToSociety);
@@ -270,17 +291,40 @@ async function getSocietySchemaName(id) {
   return rows[0]?.schema_name || null;
 }
 
-async function createSocietyRecord({ name, city, address, total_flats,plan, trial_ends_at  }) {
+// async function createSocietyRecord({ name, city, address, total_flats,plan, trial_ends_at  }) {
+//   const id = newId();
+//   const schemaName = schemaNameForSociety(id);
+//   await pool.query(
+//     `INSERT INTO societies (id, name, city, address, total_flats, schema_name,plan, trial_ends_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+//     [id, name, city || '', address || '', total_flats ?? null, schemaName,plan || 'trial', trial_ends_at || null]
+//   );
+//   await ensureSocietySchema(schemaName);
+//   return getSocietyById(id);
+// }
+async function createSocietyRecord({ name, city, address, total_flats, approved = false, plan = 'trial', trialEndsAt = null }) {
   const id = newId();
   const schemaName = schemaNameForSociety(id);
   await pool.query(
-    `INSERT INTO societies (id, name, city, address, total_flats, schema_name,plan, trial_ends_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [id, name, city || '', address || '', total_flats ?? null, schemaName,plan || 'trial', trial_ends_at || null]
+    `INSERT INTO societies (id, name, city, address, total_flats, schema_name, approved, approved_at, plan, trial_ends_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [id, name, city || '', address || '', total_flats ?? null, schemaName, approved, approved ? nowIso() : null, plan, trialEndsAt]
   );
   await ensureSocietySchema(schemaName);
   return getSocietyById(id);
 }
 
+// Approving a self-signed-up society is what starts its trial clock — until
+// then nobody in it (not even its admin) is allowed to log in.
+async function approveSocietyRecord(id) {
+  const existing = await getSocietyById(id);
+  if (!existing) return null;
+  const trialEndsAt = existing.trial_ends_at || new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query(
+    `UPDATE societies SET approved = true, approved_at = now(), trial_ends_at = $1, updated_date = now() WHERE id = $2`,
+    [trialEndsAt, id]
+  );
+  return getSocietyById(id);
+}
 async function updateSocietyRecord(id, patch) {
   const existing = await getSocietyById(id);
   if (!existing) return null;
@@ -372,6 +416,8 @@ async function seedIfEmpty() {
       address: '12, Lake View Road',
       city: 'Bengaluru',
       total_flats: 120,
+      approved: true,
+      plan: 'pro',
     });
     const schemaName = await getSocietySchemaName(society.id);
 
@@ -669,10 +715,52 @@ app.get('/api/public-settings', (_req, res) => {
   res.json({ id: 'wgate-local', public_settings: { auth_mode: 'local', app_name: 'WGate' } });
 });
 
+// app.get('/api/public/societies', wrap(async (_req, res) => {
+//   const societies = await listSocieties();
+//   res.json(societies.map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats })));
+// }));
 app.get('/api/public/societies', wrap(async (_req, res) => {
   const societies = await listSocieties();
-  res.json(societies.map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats })));
+  // Only approved societies can log in, so only offer those on the login
+  // screen — a society that just signed up has nothing to select yet.
+  res.json(
+    societies
+      .filter((s) => s.approved)
+      .map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats }))
+  );
 }));
+
+/* Self-service signup. Creates the society and its first admin, but the
+   society starts unapproved: nobody in it can log in until a super admin
+   approves it (see POST /api/superadmin/societies/:id/approve), at which
+   point its trial period starts. */
+app.post('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ message: 'Society name is required' });
+  // Created directly by the super admin, so it's trusted already — no
+  // approval step needed, and its trial period starts right away.
+  const society = await createSocietyRecord({
+    name,
+    city: req.body?.city,
+    address: req.body?.address,
+    total_flats: req.body?.total_flats ?? null,
+    approved: true,
+    plan: 'trial',
+    trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+  });
+  res.status(201).json(society);
+}));
+
+/* Approve a society that signed up through /api/signup. Starts its trial
+   period and allows its members to log in for the first time. */
+app.post('/api/superadmin/societies/:id/approve', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  if (society.approved) return res.json(society);
+  const updated = await approveSocietyRecord(req.params.id);
+  res.json(updated);
+}));
+
 /* Self-serve signup: a prospective customer creates their own society +
    admin account, no superadmin involved. Starts a 14-day trial on
    whichever plan they picked (billing/enforcement of the plan itself is
@@ -753,7 +841,18 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const password = req.body?.password;
   const requestedSocietyId = req.body?.society_id || null;
   if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
+  const user = await findUserByEmail(schemaName, email);
+  if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+  if (!society.approved) {
+    return res.status(403).json({
+      message: 'Your society is awaiting super admin approval. You will be able to sign in once it is approved.',
+      code: 'society_not_approved',
+    });
+  }
 
+  await pruneSessions();
   if (!requestedSocietyId) {
     // No society selected — this is the super admin login path.
     const { rows } = await pool.query('SELECT * FROM superadmins WHERE email = $1', [email]);

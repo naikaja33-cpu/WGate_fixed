@@ -1,137 +1,148 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { wgate } from '@/api/wgateClient';
-import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { Shield, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import AuthLayout from '@/components/AuthLayout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Button } from '@/components/ui/button';
+import { wgate } from '@/api/wgateClient';
 
-const PLANS = [
-  { id: 'starter', name: 'Starter', blurb: 'For smaller societies getting started.' },
-  { id: 'pro', name: 'Pro', blurb: 'For larger societies that need everything.' },
-];
+const initialForm = {
+  society_name: '',
+  city: '',
+  address: '',
+  total_flats: '',
+  full_name: '',
+  email: '',
+  phone: '',
+  password: '',
+};
 
 export default function Signup() {
-  const navigate = useNavigate();
-  const [societyName, setSocietyName] = useState('');
-  const [city, setCity] = useState('');
-  const [totalFlats, setTotalFlats] = useState('');
-  const [adminName, setAdminName] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPhone, setAdminPhone] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [plan, setPlan] = useState('starter');
+  const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(null); // { society } once signed up
+
+  const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!societyName.trim()) return setError('Society name is required');
-    if (!adminName.trim()) return setError('Your name is required');
-    if (!adminEmail.trim()) return setError('Email is required');
-    if (!adminPhone.trim() || adminPhone.length !== 10) return setError('Phone number must be exactly 10 digits');
-    if (!adminPassword || adminPassword.length < 6) return setError('Password must be at least 6 characters');
+    if (!form.society_name.trim()) return setError('Society name is required');
+    if (!form.email.trim()) return setError('Email is required');
+    if (!form.password || form.password.length < 6) return setError('Password must be at least 6 characters');
 
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
-      await wgate.auth.signup({
-        societyName: societyName.trim(),
-        city: city.trim(),
-        totalFlats: totalFlats ? Number(totalFlats) : undefined,
-        adminName: adminName.trim(),
-        adminEmail: adminEmail.trim(),
-        adminPhone,
-        adminPassword,
-        plan,
+      const result = await wgate.auth.signup({
+        society_name: form.society_name.trim(),
+        city: form.city.trim(),
+        address: form.address.trim(),
+        total_flats: form.total_flats ? Number(form.total_flats) : null,
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        password: form.password,
       });
-      // Token is now stored (wgate.auth.signup sets it like login does).
-      // Reloading lets the app's normal auth bootstrap pick up the session.
-      window.location.href = import.meta.env.BASE_URL;
+      setSubmitted(result);
     } catch (err) {
-      setError(err?.message || 'Something went wrong');
-      setIsLoading(false);
+      setError(err?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  if (submitted) {
+    return (
+      <AuthLayout icon={Shield} title="WGATE" subtitle="Signup received">
+        <div className="text-center space-y-4">
+          <CheckCircle2 className="w-12 h-12 text-primary mx-auto" />
+          <p className="text-sm text-foreground">
+            Thanks! <span className="font-medium">{submitted.society?.name}</span> has been created.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {submitted.message || 'A super admin will review and approve your society before you can sign in. You\u2019ll get your 14-day trial as soon as it\u2019s approved.'}
+          </p>
+          <Link to="/" className="inline-block">
+            <Button className="w-full mt-2">Back to Sign In</Button>
+          </Link>
+        </div>
+      </AuthLayout>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-md bg-card rounded-2xl p-6 space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold">Start your free trial</h1>
-          <p className="text-sm text-muted-foreground">14 days, no card required.</p>
-        </div>
+    <AuthLayout icon={Shield} title="WGATE" subtitle="Set up your society">
+      <Link
+        to="/"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to sign in
+      </Link>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs">Society Name</Label>
-          <Input placeholder="e.g. Green Valley Residency" value={societyName} onChange={e => setSocietyName(e.target.value)} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Society</p>
           <div className="space-y-1.5">
-            <Label className="text-xs">City</Label>
-            <Input placeholder="e.g. Bengaluru" value={city} onChange={e => setCity(e.target.value)} />
+            <Label htmlFor="signup-society-name">Society Name *</Label>
+            <Input id="signup-society-name" value={form.society_name} onChange={setField('society_name')} required autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-city">City</Label>
+              <Input id="signup-city" value={form.city} onChange={setField('city')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-flats">Total Flats</Label>
+              <Input id="signup-flats" type="number" min="0" value={form.total_flats} onChange={setField('total_flats')} />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Total Flats</Label>
-            <Input type="number" placeholder="e.g. 120" value={totalFlats} onChange={e => setTotalFlats(e.target.value)} />
+            <Label htmlFor="signup-address">Address</Label>
+            <Input id="signup-address" value={form.address} onChange={setField('address')} />
           </div>
         </div>
 
-        <hr className="border-border" />
-
-        <div className="space-y-1.5">
-          <Label className="text-xs">Your Name</Label>
-          <Input placeholder="e.g. Rahul Sharma" value={adminName} onChange={e => setAdminName(e.target.value)} />
+        <div className="space-y-3 pt-2 border-t border-border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-3">Your admin account</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-name">Full Name</Label>
+            <Input id="signup-name" value={form.full_name} onChange={setField('full_name')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-email">Email *</Label>
+            <Input id="signup-email" type="email" autoComplete="username" value={form.email} onChange={setField('email')} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-phone">Phone</Label>
+            <Input id="signup-phone" value={form.phone} onChange={setField('phone')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-password">Password *</Label>
+            <Input
+              id="signup-password"
+              type="password"
+              autoComplete="new-password"
+              value={form.password}
+              onChange={setField('password')}
+              required
+              minLength={6}
+            />
+          </div>
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs">Your Email</Label>
-          <Input type="email" placeholder="you@email.com" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} />
-        </div>
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
-        <div className="space-y-1.5">
-          <Label className="text-xs">Contact Number</Label>
-          <Input
-            type="tel"
-            inputMode="numeric"
-            placeholder="e.g. 9876543210"
-            value={adminPhone}
-            onChange={e => setAdminPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            maxLength={10}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs">Password</Label>
-          <Input type="password" placeholder="At least 6 characters" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs">Plan</Label>
-          <RadioGroup value={plan} onValueChange={setPlan} className="space-y-2">
-            {PLANS.map(p => (
-              <label key={p.id} className="flex items-start gap-2 border rounded-xl p-3 cursor-pointer">
-                <RadioGroupItem value={p.id} className="mt-0.5" />
-                <span>
-                  <span className="block text-sm font-medium">{p.name}</span>
-                  <span className="block text-xs text-muted-foreground">{p.blurb}</span>
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
-        </div>
-
-        {error && <p className="text-xs text-destructive">{error}</p>}
-
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? 'Creating your account...' : 'Start free trial'}
-        </Button>
-
-        <p className="text-xs text-center text-muted-foreground">
-          Already have an account? <Link to="/login" className="underline">Log in</Link>
+        <p className="text-xs text-muted-foreground">
+          Your society starts on a 14-day trial, which begins once a super admin approves your signup. You won&apos;t be able to sign in until then.
         </p>
+
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? 'Submitting...' : 'Create Society'}
+        </Button>
       </form>
-    </div>
+    </AuthLayout>
   );
 }
