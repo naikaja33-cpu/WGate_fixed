@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Shield, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import AuthLayout from '@/components/AuthLayout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
-import { Link } from 'react-router-dom';
+
 export default function Login() {
   const { login } = useAuth();
 
@@ -122,16 +123,17 @@ export default function Login() {
               <div>
                 <p className="font-medium">{society.name}</p>
                 {society.city && <p className="text-sm text-muted-foreground">{society.city}</p>}
-                <p className="text-center text-sm text-muted-foreground pt-2">
-              New society?{' '}
-              <Link to="/signup" className="text-primary font-medium hover:underline">
-              Sign up
-              </Link>
-            </p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
             </button>
           ))}
+
+          <p className="text-center text-sm text-muted-foreground pt-2">
+            New society?{' '}
+            <Link to="/signup" className="text-primary font-medium hover:underline">
+              Sign up
+            </Link>
+          </p>
         </div>
       </AuthLayout>
     );

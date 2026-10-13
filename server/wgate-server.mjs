@@ -215,7 +215,7 @@ async function initSchema() {
       updated_date TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
-    // Self-service signup support: a society created via /api/signup starts
+  // Self-service signup support: a society created via /api/signup starts
   // unapproved and nobody in it can log in until a super admin approves it.
   // Approving stamps approved_at and starts the trial window.
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'trial';`);
@@ -247,19 +247,6 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
 }
 
-// function rowToSociety(row) {
-//   return {
-//     id: row.id,
-//     name: row.name,
-//     city: row.city || '',
-//     address: row.address || '',
-//     total_flats: row.total_flats,
-//     plan: row.plan || 'trial',
-//     trial_ends_at: row.trial_ends_at instanceof Date ? row.trial_ends_at.toISOString() : row.trial_ends_at,
-//     created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
-//     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
-//   };
-// }
 function rowToSociety(row) {
   return {
     id: row.id,
@@ -275,6 +262,7 @@ function rowToSociety(row) {
     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
   };
 }
+
 async function listSocieties() {
   const { rows } = await pool.query('SELECT * FROM societies ORDER BY name');
   return rows.map(rowToSociety);
@@ -291,16 +279,6 @@ async function getSocietySchemaName(id) {
   return rows[0]?.schema_name || null;
 }
 
-// async function createSocietyRecord({ name, city, address, total_flats,plan, trial_ends_at  }) {
-//   const id = newId();
-//   const schemaName = schemaNameForSociety(id);
-//   await pool.query(
-//     `INSERT INTO societies (id, name, city, address, total_flats, schema_name,plan, trial_ends_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-//     [id, name, city || '', address || '', total_flats ?? null, schemaName,plan || 'trial', trial_ends_at || null]
-//   );
-//   await ensureSocietySchema(schemaName);
-//   return getSocietyById(id);
-// }
 async function createSocietyRecord({ name, city, address, total_flats, approved = false, plan = 'trial', trialEndsAt = null }) {
   const id = newId();
   const schemaName = schemaNameForSociety(id);
@@ -325,6 +303,7 @@ async function approveSocietyRecord(id) {
   );
   return getSocietyById(id);
 }
+
 async function updateSocietyRecord(id, patch) {
   const existing = await getSocietyById(id);
   if (!existing) return null;
@@ -715,10 +694,6 @@ app.get('/api/public-settings', (_req, res) => {
   res.json({ id: 'wgate-local', public_settings: { auth_mode: 'local', app_name: 'WGate' } });
 });
 
-// app.get('/api/public/societies', wrap(async (_req, res) => {
-//   const societies = await listSocieties();
-//   res.json(societies.map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats })));
-// }));
 app.get('/api/public/societies', wrap(async (_req, res) => {
   const societies = await listSocieties();
   // Only approved societies can log in, so only offer those on the login
@@ -734,106 +709,52 @@ app.get('/api/public/societies', wrap(async (_req, res) => {
    society starts unapproved: nobody in it can log in until a super admin
    approves it (see POST /api/superadmin/societies/:id/approve), at which
    point its trial period starts. */
-app.post('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (req, res) => {
-  const name = (req.body?.name || '').trim();
+app.post('/api/signup', wrap(async (req, res) => {
+  const name = String(req.body?.society_name || '').trim();
   if (!name) return res.status(400).json({ message: 'Society name is required' });
-  // Created directly by the super admin, so it's trusted already — no
-  // approval step needed, and its trial period starts right away.
+
+  const email = normEmail(req.body?.email);
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+  const password = req.body?.password;
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+  if (!isValidPhone(req.body?.phone)) {
+    return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+  }
+
   const society = await createSocietyRecord({
     name,
     city: req.body?.city,
     address: req.body?.address,
     total_flats: req.body?.total_flats ?? null,
-    approved: true,
+    approved: false,
     plan: 'trial',
-    trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  res.status(201).json(society);
-}));
-
-/* Approve a society that signed up through /api/signup. Starts its trial
-   period and allows its members to log in for the first time. */
-app.post('/api/superadmin/societies/:id/approve', requireAuth, requireSuperadmin, wrap(async (req, res) => {
-  const society = await getSocietyById(req.params.id);
-  if (!society) return res.status(404).json({ message: 'Society not found' });
-  if (society.approved) return res.json(society);
-  const updated = await approveSocietyRecord(req.params.id);
-  res.json(updated);
-}));
-
-/* Self-serve signup: a prospective customer creates their own society +
-   admin account, no superadmin involved. Starts a 14-day trial on
-   whichever plan they picked (billing/enforcement of the plan itself is
-   future work — this just records the choice and the trial window). */
-const PLANS = ['trial', 'starter', 'pro'];
-const TRIAL_DAYS = 14;
-
-app.post('/api/signup', wrap(async (req, res) => {
-  const societyName = String(req.body?.society_name || '').trim();
-  const city = String(req.body?.city || '').trim();
-  const address = String(req.body?.address || '').trim();
-  const totalFlats = req.body?.total_flats ? Number(req.body.total_flats) : null;
-  const plan = PLANS.includes(req.body?.plan) ? req.body.plan : 'trial';
-
-  const adminName = String(req.body?.admin_name || '').trim();
-  const email = normEmail(req.body?.admin_email);
-  const password = req.body?.admin_password;
-  const phone = req.body?.admin_phone;
-
-  if (!societyName) return res.status(400).json({ message: 'Society name is required' });
-  if (!adminName) return res.status(400).json({ message: 'Your name is required' });
-  if (!email) return res.status(400).json({ message: 'Email is required' });
-  if (!password || String(password).length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' });
-  }
-  if (!String(phone || '').trim()) return res.status(400).json({ message: 'Phone number is required' });
-  if (!isValidPhone(phone)) return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
-
-  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-  const society = await createSocietyRecord({
-    name: societyName,
-    city,
-    address,
-    total_flats: totalFlats,
-    plan,
-    trial_ends_at: trialEndsAt,
   });
   const schemaName = await getSocietySchemaName(society.id);
 
-  const admin = baseRecord({
+  const admin = {
+    ...baseRecord({ created_by: email, created_by_id: null }),
     email,
     password_hash: hashPassword(password),
-    full_name: adminName,
+    full_name: req.body?.full_name || email.split('@')[0],
     role: 'admin',
-    flat_number: 'Office',
-    phone,
+    flat_number: req.body?.flat_number || '',
+    phone: req.body?.phone || '',
     society_id: society.id,
     society_name: society.name,
     disabled: false,
-    is_verified: true,
-    must_change_password: false, // they just chose this password themselves
-  });
+    is_verified: false,
+    must_change_password: false,
+  };
   await insertEntityRecord(schemaName, 'User', admin);
 
-  await pruneSessions();
-  const token = await createSession(admin.id, society.id);
-
-  // Best-effort welcome email — a failure here must never block signup.
-  const emailResult = await sendEmail({
-    to: admin.email,
-    subject: `Welcome to WGate, ${society.name}`,
-    text: `Your ${TRIAL_DAYS}-day trial has started.\n\nSociety: ${society.name}\nPlan: ${plan}\nTrial ends: ${new Date(trialEndsAt).toLocaleDateString()}\n\nLog in any time at ${APP_URL || 'your WGate URL'} with ${email}.`,
-    html: `<p>Your ${TRIAL_DAYS}-day trial has started.</p><p><b>Society:</b> ${escapeHtml(society.name)}<br/><b>Plan:</b> ${escapeHtml(plan)}<br/><b>Trial ends:</b> ${new Date(trialEndsAt).toLocaleDateString()}</p><p>Log in any time with <b>${escapeHtml(email)}</b>.</p>`,
-  });
-
   res.status(201).json({
-    token,
-    user: publicUser(admin),
-    society,
-    email_sent: emailResult.ok,
+    message: 'Thanks for signing up. A super admin will review your society and approve it before you can sign in.',
+    society: { id: society.id, name: society.name },
   });
 }));
+
 /* ---------------------------- auth ---------------------------- */
 
 app.post('/api/auth/login', wrap(async (req, res) => {
@@ -841,18 +762,7 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const password = req.body?.password;
   const requestedSocietyId = req.body?.society_id || null;
   if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
-  const user = await findUserByEmail(schemaName, email);
-  if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
-    return res.status(401).json({ message: 'Invalid email or password' });
-  }
-  if (!society.approved) {
-    return res.status(403).json({
-      message: 'Your society is awaiting super admin approval. You will be able to sign in once it is approved.',
-      code: 'society_not_approved',
-    });
-  }
 
-  await pruneSessions();
   if (!requestedSocietyId) {
     // No society selected — this is the super admin login path.
     const { rows } = await pool.query('SELECT * FROM superadmins WHERE email = $1', [email]);
@@ -872,6 +782,12 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const user = await findUserByEmail(schemaName, email);
   if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ message: 'Invalid email or password' });
+  }
+  if (!society.approved) {
+    return res.status(403).json({
+      message: 'Your society is awaiting super admin approval. You will be able to sign in once it is approved.',
+      code: 'society_not_approved',
+    });
   }
 
   await pruneSessions();
@@ -1193,13 +1109,28 @@ app.post('/api/users/reset-requests/:id/dismiss', requireAuth, requireAdmin, req
 app.post('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ message: 'Society name is required' });
+  // Created directly by the super admin, so it's trusted already — no
+  // approval step needed, and its trial period starts right away.
   const society = await createSocietyRecord({
     name,
     city: req.body?.city,
     address: req.body?.address,
     total_flats: req.body?.total_flats ?? null,
+    approved: true,
+    plan: 'trial',
+    trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
   });
   res.status(201).json(society);
+}));
+
+/* Approve a society that signed up through /api/signup. Starts its trial
+   period and allows its members to log in for the first time. */
+app.post('/api/superadmin/societies/:id/approve', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  if (society.approved) return res.json(society);
+  const updated = await approveSocietyRecord(req.params.id);
+  res.json(updated);
 }));
 
 app.patch('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap(async (req, res) => {
@@ -1695,19 +1626,8 @@ async function updateHandler(req, res) {
         return res.status(409).json({ message: 'A user with this email already exists' });
       }
     }
-    // if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
-    //   return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
-    // }
-    if (patch.phone !== undefined) {
-      if (!String(patch.phone || '').trim()) {
-        return res.status(400).json({ message: 'Phone number is required' });
-      }
-      if (!isValidPhone(patch.phone)) {
-        return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
-      }
-    }
-    if (patch.flat_number !== undefined && !String(patch.flat_number || '').trim()) {
-      return res.status(400).json({ message: 'Flat number is required' });
+    if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
+      return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
     }
     if (patch.password) {
       patch.password_hash = hashPassword(patch.password);
