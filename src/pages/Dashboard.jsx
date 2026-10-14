@@ -54,7 +54,7 @@ export default function Dashboard() {
           Hello, {user?.full_name?.split(' ')[0] || 'there'} 👋
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {isAdmin ? 'Society overview' : `Flat ${user?.flat_number || '—'}`}
+          {isAdmin ? `${user?.society_name || 'Society'} overview` : `Flat ${user?.flat_number || '—'}`}
         </p>
       </div>
 
