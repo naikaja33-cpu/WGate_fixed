@@ -8,44 +8,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 
-// function PlanBadge({ society }) {
-//   if (!society.plan) return null;
-//   const isTrial = society.plan === 'trial';
-//   let trialInfo = null;
-//   if (isTrial && society.trial_ends_at) {
-//     const daysLeft = Math.ceil((new Date(society.trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24));
-//     trialInfo = daysLeft < 0
-//       ? { label: 'Trial expired', className: 'bg-destructive/10 text-destructive' }
-//       : daysLeft <= 3
-//       ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
-//       : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
-//   }
-//   return (
-//     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-//       <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
-//         {society.plan}
-//       </span>
-//       {trialInfo && (
-//         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
-//           {trialInfo.label}
-//         </span>
-//       )}
-//     </div>
-//   );
-// }
+// Mirrors the backend's GRACE_DAYS (server/wgate-server.mjs) — how many
+// extra days a society keeps working after its trial date passes before
+// login gets hard-locked.
+const GRACE_DAYS = 7;
+
 function PlanBadge({ society }) {
   if (!society.plan) return null;
   // The countdown applies to any plan with a trial window set, not only a
   // plan literally named "trial" — every signup gets a 14-day trial no
-  // matter which plan they ultimately land on.
+  // matter which plan they ultimately land on. Paid plans (no trial clock
+  // enforced server-side) just show the plan name.
   let trialInfo = null;
-  if (society.trial_ends_at) {
-    const daysLeft = Math.ceil((new Date(society.trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24));
-    trialInfo = daysLeft < 0
-      ? { label: 'Trial expired', className: 'bg-destructive/10 text-destructive' }
-      : daysLeft <= 3
-      ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
-      : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
+  if (society.plan === 'trial' && society.trial_ends_at) {
+    const trialEndsAt = new Date(society.trial_ends_at);
+    const graceEndsAt = new Date(trialEndsAt.getTime() + GRACE_DAYS * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    if (now <= trialEndsAt) {
+      const daysLeft = Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24));
+      trialInfo = daysLeft <= 3
+        ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
+        : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
+    } else if (now <= graceEndsAt) {
+      const graceDaysLeft = Math.ceil((graceEndsAt - now) / (1000 * 60 * 60 * 24));
+      trialInfo = { label: `Grace period: ${graceDaysLeft}d left`, className: 'bg-amber-100 text-amber-800' };
+    } else {
+      trialInfo = { label: 'Locked — trial & grace ended', className: 'bg-destructive/10 text-destructive' };
+    }
   }
   return (
     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -60,6 +49,11 @@ function PlanBadge({ society }) {
       {society.approved === false && (
         <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">
           Pending approval
+        </span>
+      )}
+      {society.suspended && (
+        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-destructive/10 text-destructive">
+          Suspended
         </span>
       )}
     </div>
@@ -94,33 +88,18 @@ export default function SuperAdminDashboard() {
     loadSocieties();
   }, []);
 
-   const handleDeleteSociety = async (society) => {
+  const handleDeleteSociety = async (society) => {
     setActionError('');
     if (!window.confirm(`Delete "${society.name}"? This cannot be undone.`)) return;
     try {
       await wgate.superadmin.deleteSociety(society.id);
       loadSocieties();
     } catch (err) {
-      if (err?.status === 409) {
-        const memberCount = err?.data?.member_count;
-        const confirmForce = window.confirm(
-          `"${society.name}" still has ${memberCount ?? 'some'} member(s). ` +
-          `Force delete anyway? This permanently deletes the society AND all its members, visitors, tickets, notices and bills.`
-        );
-        if (confirmForce) {
-          try {
-            await wgate.superadmin.deleteSociety(society.id, true);
-            loadSocieties();
-          } catch (err2) {
-            setActionError(err2?.message || 'Failed to delete society');
-          }
-        }
-        return;
-      }
       setActionError(err?.message || 'Failed to delete society');
     }
   };
-    const handleApproveSociety = async (society) => {
+
+  const handleApproveSociety = async (society) => {
     setActionError('');
     try {
       await wgate.superadmin.approveSociety(society.id);
@@ -129,6 +108,63 @@ export default function SuperAdminDashboard() {
       setActionError(err?.message || 'Failed to approve society');
     }
   };
+
+  const handleExtendTrial = async (society) => {
+    setActionError('');
+    const input = window.prompt(`Extend ${society.name}'s trial by how many days?`, '14');
+    if (input === null) return;
+    const days = Number(input);
+    if (!Number.isFinite(days) || days <= 0) {
+      setActionError('Enter a positive number of days');
+      return;
+    }
+    try {
+      await wgate.superadmin.extendTrial(society.id, days);
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to extend trial');
+    }
+  };
+
+  const handleUpgradeSociety = async (society) => {
+    setActionError('');
+    const input = window.prompt(`Upgrade ${society.name} to which plan? Type "starter" or "pro".`, 'pro');
+    if (input === null) return;
+    const plan = input.trim().toLowerCase();
+    if (!['starter', 'pro'].includes(plan)) {
+      setActionError('Plan must be "starter" or "pro"');
+      return;
+    }
+    try {
+      await wgate.superadmin.upgradeSociety(society.id, plan);
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to upgrade society');
+    }
+  };
+
+  const handleSuspendSociety = async (society) => {
+    setActionError('');
+    const reason = window.prompt(`Suspend ${society.name}? Optionally give a reason (shown to the admin):`, '');
+    if (reason === null) return;
+    try {
+      await wgate.superadmin.suspendSociety(society.id, reason.trim());
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to suspend society');
+    }
+  };
+
+  const handleUnsuspendSociety = async (society) => {
+    setActionError('');
+    try {
+      await wgate.superadmin.unsuspendSociety(society.id);
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to unsuspend society');
+    }
+  };
+
   const handleResetPassword = async (admin, society) => {
     setActionError('');
     if (!window.confirm(`Reset the password for ${admin.full_name || admin.email}? Their current password will stop working immediately.`)) return;
@@ -233,6 +269,32 @@ export default function SuperAdminDashboard() {
                     <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
                     Approve Society
                   </Button>
+                )}
+                {society.approved && society.plan === 'trial' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleExtendTrial(society)}>
+                      Extend Trial
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleUpgradeSociety(society)}>
+                      Upgrade Plan
+                    </Button>
+                  </div>
+                )}
+                {society.approved && (
+                  society.suspended ? (
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => handleUnsuspendSociety(society)}>
+                      Unsuspend
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-destructive hover:text-destructive"
+                      onClick={() => handleSuspendSociety(society)}
+                    >
+                      Suspend
+                    </Button>
+                  )
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowAddAdmin(society.id)}>

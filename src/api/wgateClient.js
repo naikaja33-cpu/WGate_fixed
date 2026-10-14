@@ -174,6 +174,18 @@ const superadmin = {
     async approveSociety(id) {
     return request(`/superadmin/societies/${id}/approve`, { method: 'POST' });
   },
+    async extendTrial(id, days) {
+    return request(`/superadmin/societies/${id}/extend-trial`, { method: 'POST', body: { days } });
+  },
+  async upgradeSociety(id, plan) {
+    return request(`/superadmin/societies/${id}/upgrade`, { method: 'POST', body: { plan } });
+  },
+  async suspendSociety(id, reason) {
+    return request(`/superadmin/societies/${id}/suspend`, { method: 'POST', body: { reason } });
+  },
+  async unsuspendSociety(id) {
+    return request(`/superadmin/societies/${id}/unsuspend`, { method: 'POST' });
+  },
     async updateSocietyMenus(id, enabledMenus) {
     return request(`/superadmin/societies/${id}/menus`, { method: 'PUT', body: { enabled_menus: enabledMenus } });
   },

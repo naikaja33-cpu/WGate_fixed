@@ -47,8 +47,13 @@ const PORT = Number(process.env.WGATE_API_PORT || process.env.PORT || 4400);
 const HOST = process.env.WGATE_API_HOST || '0.0.0.0';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const DEFAULT_INVITE_PASSWORD = 'welcome123';
-// How long a society's trial runs once the super admin approves it.
+// How long a society's trial runs once the super admin approves it, and
+// how many extra days it still gets in after the trial ends before login
+// is hard-locked. During the grace period the society can still log in and
+// use the app; after it, nobody can log in until the super admin extends
+// the trial, upgrades the plan, or lifts a manual suspension.
 const TRIAL_DAYS = 14;
+const GRACE_DAYS = 7;
 const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || '';
 
 function escapeHtml(str) {
@@ -222,6 +227,11 @@ async function initSchema() {
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;`);
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false;`);
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;`);
+  // Manual hard lock — independent of trial/grace, settable by the super
+  // admin at any time (e.g. non-payment, abuse, a support hold).
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT false;`);
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended_reason TEXT;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS superadmins (
       id UUID PRIMARY KEY,
@@ -258,9 +268,61 @@ function rowToSociety(row) {
     trial_ends_at: row.trial_ends_at instanceof Date ? row.trial_ends_at.toISOString() : row.trial_ends_at,
     approved: row.approved === true,
     approved_at: row.approved_at instanceof Date ? row.approved_at.toISOString() : row.approved_at,
+    suspended: row.suspended === true,
+    suspended_at: row.suspended_at instanceof Date ? row.suspended_at.toISOString() : row.suspended_at,
+    suspended_reason: row.suspended_reason || '',
     created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,
   };
+}
+
+// Where a society stands right now: 'trial' (counting down), 'grace' (trial
+// over, still usable), 'locked' (grace over — hard-locked), or 'active'
+// (not on a time-limited trial at all, e.g. a paid plan or no trial set).
+// Suspension is reported separately since it can hit a society on any plan.
+function trialStatusFor(society) {
+  if (society.plan !== 'trial' || !society.trial_ends_at) return { status: 'active' };
+  const now = Date.now();
+  const trialEndsAt = new Date(society.trial_ends_at).getTime();
+  const graceEndsAt = trialEndsAt + GRACE_DAYS * 24 * 60 * 60 * 1000;
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (now <= trialEndsAt) {
+    return { status: 'trial', trial_ends_at: society.trial_ends_at, days_left: Math.ceil((trialEndsAt - now) / dayMs) };
+  }
+  if (now <= graceEndsAt) {
+    return { status: 'grace', trial_ends_at: society.trial_ends_at, grace_ends_at: new Date(graceEndsAt).toISOString(), grace_days_left: Math.ceil((graceEndsAt - now) / dayMs) };
+  }
+  return { status: 'locked', trial_ends_at: society.trial_ends_at, grace_ends_at: new Date(graceEndsAt).toISOString() };
+}
+
+// Returns { code, message } if this society may not log in or use the app
+// right now, or null if access is fine. Checked both at login and on every
+// authenticated request, so a society that gets suspended or runs out its
+// grace period is cut off immediately, not just blocked from a fresh login.
+function societyAccessIssue(society) {
+  if (!society) return null; // superadmin accounts aren't tied to a society
+  if (!society.approved) {
+    return {
+      code: 'society_not_approved',
+      message: 'Your society is awaiting super admin approval. You will be able to sign in once it is approved.',
+    };
+  }
+  if (society.suspended) {
+    return {
+      code: 'society_suspended',
+      message: society.suspended_reason
+        ? `Your society has been suspended: ${society.suspended_reason}. Contact your super admin.`
+        : 'Your society has been suspended by the super admin. Contact your super admin to resolve this.',
+    };
+  }
+  const trialStatus = trialStatusFor(society);
+  if (trialStatus.status === 'locked') {
+    return {
+      code: 'trial_locked',
+      message: 'Your trial and grace period have ended. Contact your super admin to upgrade your plan.',
+    };
+  }
+  return null;
 }
 
 async function listSocieties() {
@@ -581,6 +643,10 @@ async function requireAuth(req, res, next) {
   try {
     const resolved = await resolveSession(bearerToken(req));
     if (!resolved) return res.status(401).json({ message: 'Authentication required' });
+    // Catches a society that gets suspended, or runs out its grace period,
+    // while its members are still signed in — not just at their next login.
+    const issue = societyAccessIssue(resolved.society);
+    if (issue) return res.status(403).json(issue);
     req.user = resolved.user;
     req.session = resolved.session;
     req.society = resolved.society;
@@ -783,16 +849,14 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
-  if (!society.approved) {
-    return res.status(403).json({
-      message: 'Your society is awaiting super admin approval. You will be able to sign in once it is approved.',
-      code: 'society_not_approved',
-    });
-  }
+  const issue = societyAccessIssue(society);
+  if (issue) return res.status(403).json(issue);
 
   await pruneSessions();
   const token = await createSession(user.id, requestedSocietyId);
-  res.json({ token, user: publicUser(user) });
+  // Lets the app show a "trial ends in N days" / "in grace period" banner
+  // without a separate request — included on every successful login.
+  res.json({ token, user: publicUser(user), society_status: trialStatusFor(society) });
 }));
 
 app.post('/api/auth/logout', wrap(async (req, res) => {
@@ -804,7 +868,10 @@ app.post('/api/auth/logout', wrap(async (req, res) => {
 }));
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json(publicUser(req.user));
+  res.json({
+    ...publicUser(req.user),
+    society_status: req.society ? trialStatusFor(req.society) : undefined,
+  });
 });
 
 app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
@@ -1131,6 +1198,63 @@ app.post('/api/superadmin/societies/:id/approve', requireAuth, requireSuperadmin
   if (society.approved) return res.json(society);
   const updated = await approveSocietyRecord(req.params.id);
   res.json(updated);
+}));
+
+/* Push a society's trial end date out by N days (default 14). Use this to
+   give a society more runway without fully moving them to a paid plan —
+   works whether they're still in-trial or already in their grace period. */
+app.post('/api/superadmin/societies/:id/extend-trial', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  const days = Number(req.body?.days);
+  const extendBy = Number.isFinite(days) && days > 0 ? days : TRIAL_DAYS;
+  // Extend from whichever is later: the current trial end, or now — so
+  // extending a long-expired trial doesn't still leave it expired.
+  const base = Math.max(new Date(society.trial_ends_at || 0).getTime(), Date.now());
+  const trialEndsAt = new Date(base + extendBy * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query(
+    `UPDATE societies SET plan = 'trial', trial_ends_at = $1, updated_date = now() WHERE id = $2`,
+    [trialEndsAt, req.params.id]
+  );
+  res.json(await getSocietyById(req.params.id));
+}));
+
+/* Move a society onto a paid plan. A paid plan has no trial_ends_at
+   enforcement (see trialStatusFor), so this is what actually lifts a
+   trial/grace lock for good, as opposed to extend-trial which just buys
+   more time on the trial clock. */
+app.post('/api/superadmin/societies/:id/upgrade', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  const plan = ['starter', 'pro'].includes(req.body?.plan) ? req.body.plan : 'pro';
+  await pool.query(`UPDATE societies SET plan = $1, updated_date = now() WHERE id = $2`, [plan, req.params.id]);
+  res.json(await getSocietyById(req.params.id));
+}));
+
+/* Manual hard lock, independent of the trial clock — suspend blocks login
+   and cuts off every signed-in session for that society immediately.
+   Unsuspend only undoes the suspension; it does not touch approval, plan
+   or the trial clock. */
+app.post('/api/superadmin/societies/:id/suspend', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  const reason = String(req.body?.reason || '').trim();
+  await pool.query(
+    `UPDATE societies SET suspended = true, suspended_at = now(), suspended_reason = $1, updated_date = now() WHERE id = $2`,
+    [reason || null, req.params.id]
+  );
+  await pool.query(`DELETE FROM sessions WHERE society_id = $1`, [society.id]);
+  res.json(await getSocietyById(req.params.id));
+}));
+
+app.post('/api/superadmin/societies/:id/unsuspend', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  await pool.query(
+    `UPDATE societies SET suspended = false, suspended_at = NULL, suspended_reason = NULL, updated_date = now() WHERE id = $1`,
+    [req.params.id]
+  );
+  res.json(await getSocietyById(req.params.id));
 }));
 
 app.patch('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap(async (req, res) => {
