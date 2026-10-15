@@ -746,7 +746,21 @@ const clean = (entity, record) => (entity === 'User' ? publicUser(record) : reco
 /* ------------------------------------------------------------------ */
 
 const app = express();
-app.use(cors());
+const allowedOrigins = [
+  'https://wwgate.in',
+  'https://www.wwgate.in',
+  'https://naikaja33-cpu.github.io',
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // allow requests with no origin (curl, mobile apps, server-to-server health checks)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+}));
+
 app.use(express.json({ limit: '10mb' }));
 
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
