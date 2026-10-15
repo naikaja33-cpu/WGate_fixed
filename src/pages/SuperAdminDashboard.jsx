@@ -88,13 +88,30 @@ export default function SuperAdminDashboard() {
     loadSocieties();
   }, []);
 
-  const handleDeleteSociety = async (society) => {
+    const handleDeleteSociety = async (society) => {
     setActionError('');
     if (!window.confirm(`Delete "${society.name}"? This cannot be undone.`)) return;
     try {
       await wgate.superadmin.deleteSociety(society.id);
       loadSocieties();
     } catch (err) {
+      if (err?.status === 409) {
+        const count = err?.data?.member_count ?? 'some';
+        const forceConfirm = window.confirm(
+          `"${society.name}" still has ${count} member(s). Force delete the society AND all its members? This cannot be undone.`
+        );
+        if (forceConfirm) {
+          try {
+            await wgate.superadmin.deleteSociety(society.id, true);
+            loadSocieties();
+            return;
+          } catch (err2) {
+            setActionError(err2?.message || 'Failed to force delete society');
+            return;
+          }
+        }
+        return;
+      }
       setActionError(err?.message || 'Failed to delete society');
     }
   };
