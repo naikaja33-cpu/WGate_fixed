@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -117,8 +117,14 @@ const ENTITY_DEFAULTS = {
   ServiceTicket: { priority: 'medium', status: 'open' },
   MaintenanceBill: { status: 'pending' },
   Notice: { type: 'announcement', is_pinned: false },
+  AmenityBooking: { status: 'confirmed' },
 };
-
+// Amenities residents can book. Add/remove names here to change what shows
+// up in the booking form — no other code needs to change.
+const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
+// Two time ranges (both "HH:MM" 24h strings) overlap if one starts before
+// the other ends, in both directions.
+const timesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 const ROLES = ['admin', 'tenant', 'owner', 'guard'];
 const SELF_EDITABLE_FIELDS = ['full_name', 'phone', 'flat_number'];
 
@@ -1321,7 +1327,7 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
 }));
 /* Super admin chooses which menu sections a society can use. Stored in that
    society's own SocietySettings record, which the app already reads. */
-const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing'];
+const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing','Amenities'];
 
 // Which entity belongs to which menu section. A switched-off section is
 // blocked on the API too, not just hidden in the nav.
@@ -1330,6 +1336,7 @@ const MENU_FOR_ENTITY = {
   ServiceTicket: 'ServiceTickets',
   Notice: 'NoticeBoard',
   MaintenanceBill: 'Billing',
+  AmenityBooking: 'Amenities',
 };
 const menuCache = new Map(); // schemaName -> { menus, expires }
 
@@ -1529,14 +1536,21 @@ function canRead(user, entity, record) {
     case 'User': return user.role === 'admin' || record.id === user.id;
     case 'SocietySettings':
     case 'Notice': return true;
+    // Everyone in the society can see all bookings (not just their own) so
+    // the booking form can show which slots are already taken.
+    case 'AmenityBooking': return true;
     case 'Visitor': return isStaff(user) || sameFlat(user, record);
     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
     case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
+    
     default: return false;
   }
 }
 
-function canDelete(user, entity) {
+function canDelete(user, entity, record) {
+  if (entity === 'AmenityBooking') {
+    return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
+  }
   return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
 }
 
@@ -1549,11 +1563,53 @@ const pickDefined = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 // Returns the record input to store (sanitized), or null after sending a 403.
-function authorizeCreate(req, res, entity, input) {
+// Returns the record input to store (sanitized), or null after sending an
+// error response (403 for permission, 400/409 for bad/conflicting bookings).
+async function authorizeCreate(req, res, entity, input) {
   const user = req.user;
   const body = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {};
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
+  }
+  if (entity === 'AmenityBooking') {
+    if (!isResident(user) && user.role !== 'admin') {
+      return denyWrite(res, 'Only residents and admins can book amenities');
+    }
+    const { amenity, booking_date, start_time, end_time } = body;
+    if (!AMENITIES.includes(amenity)) {
+      res.status(400).json({ message: `Unknown amenity. Choose one of: ${AMENITIES.join(', ')}` });
+      return null;
+    }
+    if (!booking_date || !start_time || !end_time) {
+      res.status(400).json({ message: 'Date, start time and end time are required' });
+      return null;
+    }
+    if (start_time >= end_time) {
+      res.status(400).json({ message: 'End time must be after start time' });
+      return null;
+    }
+    const existing = await listEntity(req.schemaName, 'AmenityBooking');
+    const conflict = existing.find((b) =>
+      b.amenity === amenity &&
+      b.booking_date === booking_date &&
+      b.status !== 'cancelled' &&
+      timesOverlap(start_time, end_time, b.start_time, b.end_time)
+    );
+    if (conflict) {
+      res.status(409).json({ message: `${amenity} is already booked for part of that time on ${booking_date}` });
+      return null;
+    }
+    return {
+      amenity,
+      booking_date,
+      start_time,
+      end_time,
+      notes: typeof body.notes === 'string' ? body.notes : '',
+      flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
+      resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
+      resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
+      status: 'confirmed',
+    };
   }
   if (entity === 'Visitor') {
     if (!isValidPhone(body.visitor_phone)) {
@@ -1585,8 +1641,17 @@ function authorizeUpdate(req, res, entity, record, patch) {
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
-  if (entity === 'ServiceTicket') {
+    if (entity === 'ServiceTicket') {
     return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
+  }
+  if (entity === 'AmenityBooking') {
+    if (user.role === 'admin') return body;
+    if (isResident(user) && sameEmail(user, record)) {
+      const keys = Object.keys(body);
+      const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
+      return onlyCancel ? body : denyWrite(res, 'You can only cancel your own booking');
+    }
+    return denyWrite(res);
   }
   if (entity === 'Visitor') {
     if (user.role === 'admin') return body;

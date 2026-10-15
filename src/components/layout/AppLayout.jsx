@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell,CalendarClock } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
@@ -10,6 +10,7 @@ const navItems = {
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
+    { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Members', icon: UserCog, label: 'Members' },
     { path: '/Profile', icon: User, label: 'Profile' },
@@ -19,6 +20,7 @@ const navItems = {
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
+    { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
   ],
@@ -27,6 +29,7 @@ const navItems = {
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
+    { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
   ],

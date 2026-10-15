@@ -19,6 +19,7 @@ import NoticeBoard from '@/pages/NoticeBoard';
 import { NotificationProvider } from '@/components/notifications/NotificationProvider';
 import { Toaster as SonnerToaster } from 'sonner';
 import Signup from '@/pages/Signup';
+import Amenities from '@/pages/Amenities';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -67,6 +68,7 @@ const AuthenticatedApp = () => {
         <Route path="/NoticeBoard" element={<NoticeBoard />} />
         <Route path="/Profile" element={<Profile />} />
         <Route path="/Members" element={<Members />} />
+        <Route path="/Amenities" element={<Amenities />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

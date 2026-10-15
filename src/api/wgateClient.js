@@ -78,25 +78,7 @@ const auth = {
     setToken(result.token);
     return result.user;
   },
-  async signup(data) {
-    const result = await request('/signup', {
-      method: 'POST',
-      body: {
-        society_name: data.societyName,
-        city: data.city,
-        address: data.address,
-        total_flats: data.totalFlats,
-        plan: data.plan,
-        admin_name: data.adminName,
-        admin_email: data.adminEmail,
-        admin_password: data.adminPassword,
-        admin_phone: data.adminPhone,
-      },
-      auth: false,
-    });
-    setToken(result.token);
-    return result;
-  },
+  
   async me() {
     return request('/auth/me');
   },
@@ -325,7 +307,7 @@ function makeEntityClient(entityName) {
 
 // Matches the backend's ENTITIES list exactly (Society is managed
 // separately via wgate.superadmin.*, not through the generic entity API).
-const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice'];
+const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking'];
 
 const entities = Object.fromEntries(ENTITY_NAMES.map((name) => [name, makeEntityClient(name)]));
 

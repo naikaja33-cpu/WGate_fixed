@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 
-export const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing'];
+export const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing','Amenities'];
 
 /**
  * Which menu sections the super admin has switched on for the signed-in

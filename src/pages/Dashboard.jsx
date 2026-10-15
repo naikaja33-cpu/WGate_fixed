@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, Bell } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import VisitorCard from '@/components/visitors/VisitorCard';
@@ -8,6 +9,7 @@ import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Link } from 'react-router-dom';
 import { useEnabledMenus } from '@/lib/useEnabledMenus';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -44,8 +46,36 @@ export default function Dashboard() {
     enabled: !!user && showTickets,
   });
 
-  const pendingVisitors = visitors.filter(v => v.status === 'pending');
+    const pendingVisitors = visitors.filter(v => v.status === 'pending');
   const openTickets = tickets.filter(t => t.status === 'open' || t.status === 'in_progress');
+
+  // --- Pending-visitor popup (residents only) ---
+  const queryClient = useQueryClient();
+  const [dismissedIds, setDismissedIds] = useState([]);
+
+  const visitorMutation = useMutation({
+    mutationFn: ({ id, data }) => wgate.entities.Visitor.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['visitors-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['visitors'] });
+    },
+  });
+
+  const popupVisitor = !isAdmin
+    ? pendingVisitors.find((v) => !dismissedIds.includes(v.id))
+    : null;
+
+  const dismissPopup = (id) => setDismissedIds((ids) => [...ids, id]);
+
+  const handlePopupApprove = (visitor) => {
+    visitorMutation.mutate({ id: visitor.id, data: { status: 'approved' } });
+    dismissPopup(visitor.id);
+  };
+
+  const handlePopupReject = (visitor) => {
+    visitorMutation.mutate({ id: visitor.id, data: { status: 'rejected' } });
+    dismissPopup(visitor.id);
+  };
 
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
@@ -128,6 +158,23 @@ export default function Dashboard() {
           <span className="font-medium text-sm">Manage society members</span>
           <span className="text-xs text-primary font-medium">Open →</span>
         </Link>
+      )}
+      {popupVisitor && (
+        <Dialog open={!!popupVisitor} onOpenChange={(open) => { if (!open) dismissPopup(popupVisitor.id); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Visitor waiting at the gate</DialogTitle>
+              <DialogDescription>Approve or reject this visitor for your flat.</DialogDescription>
+            </DialogHeader>
+            <VisitorCard
+              visitor={popupVisitor}
+              showActions
+              role={role}
+              onApprove={handlePopupApprove}
+              onReject={handlePopupReject}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
