@@ -13,7 +13,7 @@
     "typecheck": "tsc -p ./jsconfig.json",
     "server": "node server/wgate-server.mjs",
     "preview": "vite preview",
-    "build:ghpages": "cross-env VITE_BASE_PATH=/WGate_fixed/ vite build",
+    "build:ghpages": "cross-env VITE_BASE_PATH=/ vite build",
     "build:android": "vite build && npx cap sync android",
     "deploy": "npm run build:ghpages && gh-pages -d dist"
   },
