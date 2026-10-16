@@ -547,6 +547,7 @@ const ALL_MENUS = [
   { key: 'ServiceTickets', label: 'Service Tickets' },
   { key: 'NoticeBoard', label: 'Notice Board' },
   { key: 'Billing', label: 'Billing' },
+  { key: 'Amenities', label: 'Amenities' },
 ];
 
 function MenuAccessModal({ society, onClose, onSaved }) {

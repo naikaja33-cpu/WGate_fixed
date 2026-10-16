@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { CalendarClock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import {
 // the backend is the source of truth and will reject anything not in it.
 const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => format(new Date(), 'yyyy-MM-dd');
 
 export default function Amenities() {
   const { user } = useAuth();
@@ -189,7 +189,8 @@ export default function Amenities() {
               <div>
                 <p className="font-semibold text-foreground">{b.amenity}</p>
                 <p className="text-sm text-muted-foreground">
-                  {format(new Date(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
+              
+                  {format(parseISO(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
                 </p>
                 {isAdmin && <p className="text-xs text-muted-foreground mt-1">Flat {b.flat_number || '—'} · {b.resident_email}</p>}
                 {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}
