@@ -1681,14 +1681,14 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
       if (!Array.isArray(items)) return next(); // the route itself returns the 400
       const allowed = [];
       for (const item of items) {
-        const input = authorizeCreate(req, res, entity, item);
-        if (!input) return; // 403 already sent
+        const input = await authorizeCreate(req, res, entity, item);
+        if (!input) return; // error response already sent
         allowed.push(input);
       }
       req.body = allowed;
       return next();
     }
-    const input = authorizeCreate(req, res, entity, req.body);
+    const input = await authorizeCreate(req, res, entity, req.body);
     if (!input) return;
     req.body = input;
     return next();
@@ -1697,8 +1697,8 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
   if (first && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     const record = await getEntityRecord(req.schemaName, entity, first);
     if (!record) return next(); // the route itself returns the 404
-    if (req.method === 'DELETE') {
-      if (!canDelete(req.user, entity)) return denyWrite(res, 'You do not have permission to delete this');
+        if (req.method === 'DELETE') {
+      if (!canDelete(req.user, entity, record)) return denyWrite(res, 'You do not have permission to delete this');
       return next();
     }
     const patch = authorizeUpdate(req, res, entity, record, req.body);
