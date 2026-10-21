@@ -752,7 +752,7 @@ const clean = (entity, record) => (entity === 'User' ? publicUser(record) : reco
 /* ------------------------------------------------------------------ */
 
 const app = express();
-const allowedOrigins = [
+const ALLOWED_ORIGINS = [
   'https://wwgate.in',
   'https://www.wwgate.in',
   'https://naikaja33-cpu.github.io',
@@ -761,14 +761,6 @@ const allowedOrigins = [
   'http://localhost:5173',  // local dev (Vite)
 ];
 
-// app.use(cors({
-//   origin: (origin, callback) => {
-//     // allow requests with no origin (curl, mobile apps, server-to-server health checks)
-//     if (!origin) return callback(null, true);
-//     if (allowedOrigins.includes(origin)) return callback(null, true);
-//     return callback(new Error('Not allowed by CORS'));
-//   },
-// }));
 
 app.use(cors({
   origin(origin, callback) {
