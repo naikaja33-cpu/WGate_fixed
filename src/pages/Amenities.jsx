@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
-import { CalendarClock, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { CalendarClock, X, Check, Clock3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,21 @@ import {
 // the backend is the source of truth and will reject anything not in it.
 const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
 
-const todayStr = () => format(new Date(), 'yyyy-MM-dd');
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+function StatusBadge({ status }) {
+  const styles = {
+    pending: 'bg-amber-50 text-amber-700 border-amber-200',
+    confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    rejected: 'bg-red-50 text-red-600 border-red-200',
+  };
+  const labels = { pending: 'Pending approval', confirmed: 'Confirmed', rejected: 'Rejected' };
+  return (
+    <span className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border ${styles[status] || styles.pending}`}>
+      {labels[status] || status}
+    </span>
+  );
+}
 
 export default function Amenities() {
   const { user } = useAuth();
@@ -41,19 +55,21 @@ export default function Amenities() {
     queryFn: () => wgate.entities.AmenityBooking.list('-booking_date', 200),
   });
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['amenity-bookings'] });
+
   const createMutation = useMutation({
     mutationFn: (data) => wgate.entities.AmenityBooking.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['amenity-bookings'] });
+      invalidate();
       setFormError('');
       setForm((f) => ({ ...f, notes: '' }));
     },
     onError: (err) => setFormError(err?.message || 'Failed to book amenity'),
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: (id) => wgate.entities.AmenityBooking.update(id, { status: 'cancelled' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['amenity-bookings'] }),
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }) => wgate.entities.AmenityBooking.update(id, { status }),
+    onSuccess: invalidate,
   });
 
   const handleSubmit = (e) => {
@@ -66,15 +82,16 @@ export default function Amenities() {
     createMutation.mutate(form);
   };
 
-  // Existing (non-cancelled) bookings for the amenity + date currently
-  // selected in the form — shown so the resident can see taken slots
-  // before they even try to submit.
+  // Existing (non-cancelled, non-rejected) bookings for the amenity + date
+  // currently selected in the form — shown so the resident can see taken
+  // or already-requested slots before they even try to submit.
   const slotsForSelection = useMemo(
     () =>
       bookings
         .filter(
           (b) =>
             b.status !== 'cancelled' &&
+            b.status !== 'rejected' &&
             b.amenity === form.amenity &&
             b.booking_date === form.booking_date
         )
@@ -85,18 +102,29 @@ export default function Amenities() {
   const myBookings = useMemo(
     () =>
       bookings
-        .filter((b) => (isAdmin ? true : b.resident_email === user?.email))
+        .filter((b) => (isAdmin ? b.status !== 'pending' : b.resident_email === user?.email))
         .filter((b) => b.status !== 'cancelled')
         .filter((b) => b.booking_date >= todayStr())
         .sort((a, b) => a.booking_date.localeCompare(b.booking_date) || a.start_time.localeCompare(b.start_time)),
     [bookings, isAdmin, user?.email]
   );
 
+  // Admin-only: requests waiting on a decision, oldest first.
+  const pendingApprovals = useMemo(
+    () =>
+      bookings
+        .filter((b) => b.status === 'pending' && b.booking_date >= todayStr())
+        .sort((a, b) => a.booking_date.localeCompare(b.booking_date) || a.start_time.localeCompare(b.start_time)),
+    [bookings]
+  );
+
   return (
     <div className="p-4 space-y-6 max-w-2xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-foreground">Amenities Booking</h1>
-        <p className="text-sm text-muted-foreground mt-1">Book a slot — double-booking is blocked automatically.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Requests need admin approval before they're confirmed — double-booking is blocked automatically.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-card rounded-2xl border border-border p-4 space-y-4">
@@ -157,24 +185,78 @@ export default function Amenities() {
 
         {slotsForSelection.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
-            <p className="font-medium">Already booked on {form.booking_date} for {form.amenity}:</p>
-            {slotsForSelection.map((b) => (
-              <p key={b.id}>{b.start_time}–{b.end_time} (Flat {b.flat_number || '—'})</p>
-            ))}
+            {slotsForSelection.map((b) => {
+              const mine = b.resident_email === user?.email;
+              return (
+                <p key={b.id}>
+                  {mine
+                    ? `You already have a ${b.status === 'pending' ? 'pending request' : 'confirmed booking'} for ${form.amenity} on ${form.booking_date}, ${b.start_time}–${b.end_time}.`
+                    : `${b.start_time}–${b.end_time} is already ${b.status === 'pending' ? 'requested' : 'booked'} (Flat ${b.flat_number || '—'}).`}
+                </p>
+              );
+            })}
           </div>
         )}
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}
 
         <Button type="submit" className="w-full" disabled={createMutation.isPending}>
-          {createMutation.isPending ? 'Booking…' : 'Book Amenity'}
+          {createMutation.isPending ? 'Submitting…' : 'Request Booking'}
         </Button>
       </form>
+
+      {isAdmin && (
+        <div className="space-y-3">
+          <h2 className="font-semibold text-foreground flex items-center gap-2">
+            <Clock3 className="w-4 h-4 text-amber-600" />
+            Pending approval {pendingApprovals.length > 0 && `(${pendingApprovals.length})`}
+          </h2>
+
+          {isLoading ? null : pendingApprovals.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No requests waiting on a decision.</p>
+          ) : (
+            pendingApprovals.map((b) => (
+              <div key={b.id} className="bg-card rounded-2xl border border-amber-200 p-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-foreground">{b.amenity}</p>
+                    <StatusBadge status={b.status} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {format(new Date(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Flat {b.flat_number || '—'} · {b.resident_email}</p>
+                  {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => statusMutation.mutate({ id: b.id, status: 'confirmed' })}
+                    disabled={statusMutation.isPending}
+                  >
+                    <Check className="w-4 h-4 mr-1" /> Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-red-200 text-red-600 hover:bg-red-50"
+                    onClick={() => statusMutation.mutate({ id: b.id, status: 'rejected' })}
+                    disabled={statusMutation.isPending}
+                  >
+                    <X className="w-4 h-4 mr-1" /> Reject
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         <h2 className="font-semibold text-foreground flex items-center gap-2">
           <CalendarClock className="w-4 h-4 text-primary" />
-          {isAdmin ? 'Upcoming bookings (all residents)' : 'My upcoming bookings'}
+          {isAdmin ? 'Confirmed bookings (all residents)' : 'My upcoming bookings'}
         </h2>
 
         {isLoading ? (
@@ -187,23 +269,27 @@ export default function Amenities() {
           myBookings.map((b) => (
             <div key={b.id} className="bg-card rounded-2xl border border-border p-4 flex items-center justify-between">
               <div>
-                <p className="font-semibold text-foreground">{b.amenity}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-foreground">{b.amenity}</p>
+                  <StatusBadge status={b.status} />
+                </div>
                 <p className="text-sm text-muted-foreground">
-              
-                  {format(parseISO(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
+                  {format(new Date(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
                 </p>
                 {isAdmin && <p className="text-xs text-muted-foreground mt-1">Flat {b.flat_number || '—'} · {b.resident_email}</p>}
                 {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-red-200 text-red-600 hover:bg-red-50"
-                onClick={() => cancelMutation.mutate(b.id)}
-                disabled={cancelMutation.isPending}
-              >
-                <X className="w-4 h-4 mr-1" /> Cancel
-              </Button>
+              {b.status !== 'rejected' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                  onClick={() => statusMutation.mutate({ id: b.id, status: 'cancelled' })}
+                  disabled={statusMutation.isPending}
+                >
+                  <X className="w-4 h-4 mr-1" /> Cancel
+                </Button>
+              )}
             </div>
           ))
         )}

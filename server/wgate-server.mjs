@@ -117,7 +117,7 @@ const ENTITY_DEFAULTS = {
   ServiceTicket: { priority: 'medium', status: 'open' },
   MaintenanceBill: { status: 'pending' },
   Notice: { type: 'announcement', is_pinned: false },
-  AmenityBooking: { status: 'confirmed' },
+  AmenityBooking: { status: 'pending' },
 };
 // Amenities residents can book. Add/remove names here to change what shows
 // up in the booking form — no other code needs to change.
@@ -1593,10 +1593,12 @@ async function authorizeCreate(req, res, entity, input) {
       b.amenity === amenity &&
       b.booking_date === booking_date &&
       b.status !== 'cancelled' &&
+      b.status !== 'rejected' &&
       timesOverlap(start_time, end_time, b.start_time, b.end_time)
     );
     if (conflict) {
-      res.status(409).json({ message: `${amenity} is already booked for part of that time on ${booking_date}` });
+      //res.status(409).json({ message: `${amenity} is already booked for part of that time on ${booking_date}` });
+      res.status(409).json({ message: `${amenity} is already booked (or pending approval) for part of that time on ${booking_date}` });
       return null;
     }
     return {
@@ -1608,7 +1610,7 @@ async function authorizeCreate(req, res, entity, input) {
       flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
       resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
       resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
-      status: 'confirmed',
+      status: 'pending',
     };
   }
   if (entity === 'Visitor') {
@@ -1645,7 +1647,12 @@ function authorizeUpdate(req, res, entity, record, patch) {
     return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
   }
   if (entity === 'AmenityBooking') {
-    if (user.role === 'admin') return body;
+    if (user.role === 'admin'){
+      if ('status' in body && !['pending', 'confirmed', 'rejected', 'cancelled'].includes(body.status)) {
+        return denyWrite(res, 'Invalid booking status');
+      }
+      return body;
+    }
     if (isResident(user) && sameEmail(user, record)) {
       const keys = Object.keys(body);
       const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
