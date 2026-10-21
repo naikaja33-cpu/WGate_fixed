@@ -57,10 +57,17 @@ export default function AppLayout() {
   // everyone in the society, including its admin. Home, Profile and Members
   // are always visible.
   const ALWAYS_VISIBLE = ['/Dashboard', '/Profile', '/Members'];
+  // Pre-Approvals doesn't have its own super admin toggle — it rides on the
+  // existing "Visitors" menu section (matches MENU_FOR_ENTITY on the backend).
+  const MENU_KEY_OVERRIDES = { PreApprovals: 'Visitors' };
+  const menuKeyFor = (path) => {
+    const key = path.replace('/', '');
+    return MENU_KEY_OVERRIDES[key] || key;
+  };
   const items = !enabledMenus
     ? baseItems
-    : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
-
+    //: baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
+      : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(menuKeyFor(item.path)));
   // A page whose menu is switched off can't be opened by typing its address either.
   // 
   const pageKey = location.pathname.replace('/', '');
