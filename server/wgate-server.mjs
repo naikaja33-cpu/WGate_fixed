@@ -756,15 +756,27 @@ const allowedOrigins = [
   'https://wwgate.in',
   'https://www.wwgate.in',
   'https://naikaja33-cpu.github.io',
+  'https://localhost',      // Android app (Capacitor WebView)
+  'capacitor://localhost',  // iOS app, if you ever build one
+  'http://localhost:5173',  // local dev (Vite)
 ];
 
+// app.use(cors({
+//   origin: (origin, callback) => {
+//     // allow requests with no origin (curl, mobile apps, server-to-server health checks)
+//     if (!origin) return callback(null, true);
+//     if (allowedOrigins.includes(origin)) return callback(null, true);
+//     return callback(new Error('Not allowed by CORS'));
+//   },
+// }));
+
 app.use(cors({
-  origin: (origin, callback) => {
-    // allow requests with no origin (curl, mobile apps, server-to-server health checks)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+  origin(origin, callback) {
+    // Allow no-origin requests (native mobile shell, curl, server-to-server)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
   },
+  credentials: true,
 }));
 
 app.use(express.json({ limit: '10mb' }));
