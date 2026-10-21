@@ -20,6 +20,7 @@ import { NotificationProvider } from '@/components/notifications/NotificationPro
 import { Toaster as SonnerToaster } from 'sonner';
 import Signup from '@/pages/Signup';
 import Amenities from '@/pages/Amenities';
+import PreApprovals from '@/pages/PreApprovals';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
         <Route path="/Profile" element={<Profile />} />
         <Route path="/Members" element={<Members />} />
         <Route path="/Amenities" element={<Amenities />} />
+        <Route path="/PreApprovals" element={<PreApprovals />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

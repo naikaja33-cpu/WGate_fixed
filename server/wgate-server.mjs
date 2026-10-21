@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -118,7 +118,10 @@ const ENTITY_DEFAULTS = {
   MaintenanceBill: { status: 'pending' },
   Notice: { type: 'announcement', is_pinned: false },
   AmenityBooking: { status: 'pending' },
+  PreApproval: { status: 'active' },
 };
+// Pre-approval categories residents can create. Add/remove names here to change what shows
+const PRE_APPROVAL_CATEGORIES = ['Guest', 'Maid', 'Cook', 'Nanny', 'Driver', 'Delivery', 'Other'];
 // Amenities residents can book. Add/remove names here to change what shows
 // up in the booking form — no other code needs to change.
 const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
@@ -154,6 +157,7 @@ function generateTempPassword() {
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
+const todayStr = () => new Date().toISOString().slice(0, 10);
 const normEmail = (email) => String(email || '').trim().toLowerCase();
 const isValidPhone = (phone) => !phone || /^\d{10}$/.test(String(phone));
 
@@ -1341,6 +1345,7 @@ const MENU_FOR_ENTITY = {
   Notice: 'NoticeBoard',
   MaintenanceBill: 'Billing',
   AmenityBooking: 'Amenities',
+  PreApproval: 'Visitors',
 };
 const menuCache = new Map(); // schemaName -> { menus, expires }
 
@@ -1546,13 +1551,13 @@ function canRead(user, entity, record) {
     case 'Visitor': return isStaff(user) || sameFlat(user, record);
     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
     case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
-    
+    case 'PreApproval': return isStaff(user) || sameFlat(user, record);
     default: return false;
   }
 }
 
 function canDelete(user, entity, record) {
-  if (entity === 'AmenityBooking') {
+  if (entity === 'AmenityBooking' || entity === 'PreApproval') {
     return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
   }
   return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
@@ -1617,6 +1622,81 @@ async function authorizeCreate(req, res, entity, input) {
       status: 'pending',
     };
   }
+    if (entity === 'PreApproval') {
+    if (!isResident(user) && user.role !== 'admin') {
+      return denyWrite(res, 'Only residents and admins can create pre-approvals');
+    }
+    const { visitor_name, visitor_phone, category, frequency } = body;
+    if (!visitor_name || !String(visitor_name).trim()) {
+      res.status(400).json({ message: 'Visitor name is required' });
+      return null;
+    }
+    if (!visitor_phone || !isValidPhone(visitor_phone)) {
+      res.status(400).json({ message: 'A valid 10-digit phone number is required' });
+      return null;
+    }
+    if (!PRE_APPROVAL_CATEGORIES.includes(category)) {
+      res.status(400).json({ message: `Category must be one of: ${PRE_APPROVAL_CATEGORIES.join(', ')}` });
+      return null;
+    }
+    if (!['once', 'daily'].includes(frequency)) {
+      res.status(400).json({ message: 'Frequency must be "once" or "daily"' });
+      return null;
+    }
+    const today = todayStr();
+    let valid_from = body.valid_from || today;
+    let valid_until = body.valid_until;
+    if (frequency === 'once') {
+      valid_until = valid_from;
+    } else {
+      if (!valid_until) {
+        res.status(400).json({ message: 'An end date is required for a daily pre-approval' });
+        return null;
+      }
+      if (valid_until < valid_from) {
+        res.status(400).json({ message: 'End date must be on or after the start date' });
+        return null;
+      }
+    }
+    return {
+      visitor_name: String(visitor_name).trim(),
+      visitor_phone,
+      category,
+      frequency,
+      valid_from,
+      valid_until,
+      notes: typeof body.notes === 'string' ? body.notes : '',
+      flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
+      resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
+      resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
+      status: 'active',
+    };
+  }
+  if (entity === 'Visitor') {
+    if (!isValidPhone(body.visitor_phone)) {
+      return denyWrite(res, 'Visitor phone number must be exactly 10 digits');
+    }
+    if (user.role === 'admin') return body;
+    if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
+    delete body.check_out_time;
+
+    const today = todayStr();
+    const preApprovals = body.visitor_phone ? await listEntity(req.schemaName, 'PreApproval') : [];
+    const match = preApprovals.find((p) =>
+      p.status === 'active' &&
+      p.visitor_phone === body.visitor_phone &&
+      p.valid_from <= today &&
+      today <= p.valid_until
+    );
+    if (match) {
+      body.status = 'approved';
+      body.flat_number = body.flat_number || match.flat_number;
+      body.pre_approval_id = match.id;
+    } else {
+      body.status = 'pending';
+    }
+    return body;
+  }
   if (entity === 'Visitor') {
     if (!isValidPhone(body.visitor_phone)) {
       return denyWrite(res, 'Visitor phone number must be exactly 10 digits');
@@ -1661,6 +1741,20 @@ function authorizeUpdate(req, res, entity, record, patch) {
       const keys = Object.keys(body);
       const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
       return onlyCancel ? body : denyWrite(res, 'You can only cancel your own booking');
+    }
+    return denyWrite(res);
+  }
+    if (entity === 'PreApproval') {
+    if (user.role === 'admin') {
+      if ('status' in body && !['active', 'cancelled'].includes(body.status)) {
+        return denyWrite(res, 'Invalid status');
+      }
+      return body;
+    }
+    if (isResident(user) && sameEmail(user, record)) {
+      const keys = Object.keys(body);
+      const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
+      return onlyCancel ? body : denyWrite(res, 'You can only cancel your own pre-approval');
     }
     return denyWrite(res);
   }
