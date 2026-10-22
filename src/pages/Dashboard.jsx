@@ -107,21 +107,7 @@ export default function Dashboard() {
           )}
         </div>
       )}
-      <Link
-        to="/PreApprovals"
-        className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <UserCheck className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">Pre-Approve a Visitor</p>
-            <p className="text-xs text-muted-foreground">Guest, maid, cook or nanny — skip the wait at the gate</p>
-          </div>
-        </div>
-        <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-      </Link>
+      
             <div className="grid grid-cols-2 gap-3">
         <Link
           to="/PreApprovals"
@@ -200,7 +186,8 @@ export default function Dashboard() {
       {isAdmin && (
         <Link
           to="/Members"
-          className="flex items-center justify-between bg-card rounded-2xl border border-border p-4 hover:shadow-sm transition-all"
+          className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+          //className="flex items-center justify-between bg-card rounded-2xl border border-border p-4 hover:shadow-sm transition-all"
         >
           <span className="font-medium text-sm">Manage society members</span>
           <span className="text-xs text-primary font-medium">Open →</span>

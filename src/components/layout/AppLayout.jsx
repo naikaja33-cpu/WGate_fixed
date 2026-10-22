@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell,CalendarClock,UserCheck } from 'lucide-react';
+import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell,CalendarClock,UserCheck, KeyRound } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
@@ -41,8 +41,9 @@ const navItems = {
     { path: '/Visitors', icon: Shield, label: 'Gate' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
-    { path: '/Profile', icon: User, label: 'Profile' },
-    { path: '/PreApprovals', icon: UserCheck, label: 'Pre-Approve' },
+        { path: '/PreApprovals', icon: UserCheck, label: 'Pre-Approve' },
+        { path: '/GatePasses', icon: KeyRound, label: 'Gate Pass' },
+        { path: '/Profile', icon: User, label: 'Profile' },
   ],
 };
 

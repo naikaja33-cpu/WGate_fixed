@@ -72,9 +72,10 @@ const AuthenticatedApp = () => {
         <Route path="/Members" element={<Members />} />
         <Route path="/Amenities" element={<Amenities />} />
         <Route path="/PreApprovals" element={<PreApprovals />} />
+        <Route path="/GatePasses" element={<GatePasses />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
-      <Route path="/GatePasses" element={<GatePasses />} />
+      
     </Routes>
   );
 };
