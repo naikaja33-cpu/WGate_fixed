@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -13,7 +14,7 @@ export function NotificationProvider({ children }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const prevTicketStatuses = useRef({});
-
+  const queryClient = useQueryClient();
   const addNotification = (notif) => {
     setNotifications(prev => [{ id: Date.now(), read: false, time: new Date(), ...notif }, ...prev].slice(0, 50));
   };
@@ -84,7 +85,28 @@ export function NotificationProvider({ children }) {
       unsubVisitorUpdate();
     };
   }, [user]);
-
+  // Keep every open screen's data fresh in real time — whenever anything
+  // changes anywhere (another resident's phone, the gate, another tab),
+  // invalidate React Query's cache so the active screen refetches on its
+  // own. No pull-to-refresh or manual reload needed.
+  useEffect(() => {
+    if (!user) return;
+    let pending = null;
+    const scheduleRefresh = () => {
+      if (pending) return;
+      // Small debounce so a burst of events (e.g. a bulk check-in) only
+      // triggers one refetch instead of one per event.
+      pending = setTimeout(() => {
+        pending = null;
+        queryClient.invalidateQueries();
+      }, 300);
+    };
+    const unsubscribers = ENTITY_NAMES.map((name) => wgate.entities[name].subscribe(scheduleRefresh));
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+      if (pending) clearTimeout(pending);
+    };
+  }, [user, queryClient]);
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, markAllRead }}>
       {children}

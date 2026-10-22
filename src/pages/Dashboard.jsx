@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, IndianRupee, Bell, UserCheck,KeyRound, ChevronRight } from 'lucide-react';
+import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, IndianRupee, Bell, UserCheck,KeyRound, ChevronRight,CalendarClock } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import TicketCard from '@/components/tickets/TicketCard';
@@ -109,8 +109,25 @@ export default function Dashboard() {
         </div>
       )}
       
-      {(isEnabled('PreApprovals') || isEnabled('GatePasses')) && (
+      {(isEnabled('PreApprovals') || isEnabled('GatePasses') || isEnabled('Amenities')) && (
         <div className="grid grid-cols-2 gap-3">
+                    {isEnabled('Amenities') && (
+            <Link
+              to="/Amenities"
+              className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <CalendarClock className="w-4 h-4 text-primary" />
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground text-sm">Amenities</p>
+                <p className="text-xs text-muted-foreground">Book a slot</p>
+              </div>
+            </Link>
+          )}
           {isEnabled('PreApprovals') && (
             <Link
               to="/PreApprovals"

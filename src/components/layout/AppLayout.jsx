@@ -11,7 +11,7 @@ const navItems = {
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
-    { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
+    
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Members', icon: UserCog, label: 'Members' },
     { path: '/Profile', icon: User, label: 'Profile' },
@@ -22,7 +22,7 @@ const navItems = {
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
-    { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
+    
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
     
@@ -32,7 +32,7 @@ const navItems = {
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
-    { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
+   
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
     
@@ -77,7 +77,7 @@ export default function AppLayout() {
     : baseItems.filter(item => ALWAYS_VISIBLE.includes(item.path) || enabledMenus.includes(item.path.replace('/', '')));
 
   const pageKey = location.pathname.replace('/', '');
-  
+
   const normalizedKey = MENU_KEYS.find((k) => k.toLowerCase() === pageKey.toLowerCase());
   const isBlocked = !!enabledMenus && !!normalizedKey && !enabledMenus.includes(normalizedKey);
   return (
