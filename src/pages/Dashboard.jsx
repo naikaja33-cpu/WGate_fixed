@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { useEnabledMenus } from '@/lib/useEnabledMenus';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
+
 export default function Dashboard() {
   const { user } = useAuth();
   const role = user?.role || 'resident';
@@ -108,39 +109,45 @@ export default function Dashboard() {
         </div>
       )}
       
-            <div className="grid grid-cols-2 gap-3">
-        <Link
-          to="/PreApprovals"
-          className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <UserCheck className="w-4 h-4 text-primary" />
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground text-sm">Pre-Approve</p>
-            <p className="text-xs text-muted-foreground">Guest / Maid / Cook</p>
-          </div>
-        </Link>
+      {(isEnabled('PreApprovals') || isEnabled('GatePasses')) && (
+        <div className="grid grid-cols-2 gap-3">
+          {isEnabled('PreApprovals') && (
+            <Link
+              to="/PreApprovals"
+              className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <UserCheck className="w-4 h-4 text-primary" />
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground text-sm">Pre-Approve</p>
+                <p className="text-xs text-muted-foreground">Guest / Maid / Cook</p>
+              </div>
+            </Link>
+          )}
 
-        <Link
-          to="/GatePasses"
-          className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <KeyRound className="w-4 h-4 text-primary" />
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground text-sm">Gate Pass</p>
-            <p className="text-xs text-muted-foreground">One-time entry code</p>
-          </div>
-        </Link>
-      </div>
+          {isEnabled('GatePasses') && (
+            <Link
+              to="/GatePasses"
+              className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4 text-primary" />
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground text-sm">Gate Pass</p>
+                <p className="text-xs text-muted-foreground">One-time entry code</p>
+              </div>
+            </Link>
+          )}
+        </div>
+      )}
       {showNotices && notices.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">

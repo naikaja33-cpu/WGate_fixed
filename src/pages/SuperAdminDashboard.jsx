@@ -548,6 +548,8 @@ const ALL_MENUS = [
   { key: 'NoticeBoard', label: 'Notice Board' },
   { key: 'Billing', label: 'Billing' },
   { key: 'Amenities', label: 'Amenities' },
+  { key: 'PreApprovals', label: 'Pre-Approvals' },
+  { key: 'GatePasses', label: 'Gate Pass' },
 ];
 
 function MenuAccessModal({ society, onClose, onSaved }) {
