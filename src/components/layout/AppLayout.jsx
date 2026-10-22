@@ -60,7 +60,7 @@ export default function AppLayout() {
   const ALWAYS_VISIBLE = ['/Dashboard', '/Profile', '/Members'];
   // Pre-Approvals doesn't have its own super admin toggle — it rides on the
   // existing "Visitors" menu section (matches MENU_FOR_ENTITY on the backend).
-  const MENU_KEY_OVERRIDES = { PreApprovals: 'Visitors' };
+  const MENU_KEY_OVERRIDES = { PreApprovals: 'Visitors',GatePasses: 'Visitors' };
   const menuKeyFor = (path) => {
     const key = path.replace('/', '');
     return MENU_KEY_OVERRIDES[key] || key;
