@@ -139,7 +139,11 @@ const flats = {
     return request('/flats');
   },
 };
-
+const gatePass = {
+  async verify(code) {
+    return request('/gate-pass/verify', { method: 'POST', body: { code } });
+  },
+};
 const superadmin = {
   async listSocieties() {
     return request('/superadmin/societies');
@@ -307,7 +311,7 @@ function makeEntityClient(entityName) {
 
 // Matches the backend's ENTITIES list exactly (Society is managed
 // separately via wgate.superadmin.*, not through the generic entity API).
-const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval'];
+const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval','GatePass'];
 
 const entities = Object.fromEntries(ENTITY_NAMES.map((name) => [name, makeEntityClient(name)]));
 
@@ -318,6 +322,7 @@ export const wgate = {
   publicApi,
   flats,
   superadmin,
+  gatePass,
 };
 
 export default wgate;

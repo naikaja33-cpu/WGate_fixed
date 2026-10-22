@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval','GatePass'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -119,9 +119,28 @@ const ENTITY_DEFAULTS = {
   Notice: { type: 'announcement', is_pinned: false },
   AmenityBooking: { status: 'pending' },
   PreApproval: { status: 'active' },
+  GatePass: { status: 'active' },
 };
 // Pre-approval categories residents can create. Add/remove names here to change what shows
 const PRE_APPROVAL_CATEGORIES = ['Guest', 'Maid', 'Cook', 'Nanny', 'Driver', 'Delivery', 'Other'];
+
+const GATE_PASS_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function randomGatePassCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) code += GATE_PASS_CODE_CHARS[Math.floor(Math.random() * GATE_PASS_CODE_CHARS.length)];
+  return code;
+}
+async function generateUniqueGatePassCode(schemaName) {
+  const existing = await listEntity(schemaName, 'GatePass');
+  const taken = new Set(existing.map((p) => p.code));
+  let code = randomGatePassCode();
+  let attempts = 0;
+  while (taken.has(code) && attempts < 10) {
+    code = randomGatePassCode();
+    attempts += 1;
+  }
+  return code;
+}
 // Amenities residents can book. Add/remove names here to change what shows
 // up in the booking form — no other code needs to change.
 const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
@@ -1346,6 +1365,7 @@ const MENU_FOR_ENTITY = {
   MaintenanceBill: 'Billing',
   AmenityBooking: 'Amenities',
   PreApproval: 'Visitors',
+    GatePass: 'Visitors',
 };
 const menuCache = new Map(); // schemaName -> { menus, expires }
 
@@ -1552,12 +1572,13 @@ function canRead(user, entity, record) {
     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
     case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
     case 'PreApproval': return isStaff(user) || sameFlat(user, record);
+        case 'GatePass': return isStaff(user) || sameFlat(user, record);
     default: return false;
   }
 }
 
 function canDelete(user, entity, record) {
-  if (entity === 'AmenityBooking' || entity === 'PreApproval') {
+  if (entity === 'AmenityBooking' || entity === 'PreApproval' || entity === 'GatePass') {
     return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
   }
   return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
@@ -1672,6 +1693,40 @@ async function authorizeCreate(req, res, entity, input) {
       status: 'active',
     };
   }
+    if (entity === 'GatePass') {
+    if (!isResident(user) && user.role !== 'admin') {
+      return denyWrite(res, 'Only residents and admins can create a gate pass');
+    }
+    const { visitor_name } = body;
+    if (!visitor_name || !String(visitor_name).trim()) {
+      res.status(400).json({ message: 'Visitor name is required' });
+      return null;
+    }
+    if (body.visitor_phone && !isValidPhone(body.visitor_phone)) {
+      res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+      return null;
+    }
+    const today = todayStr();
+    const valid_date = body.valid_date || today;
+    if (valid_date < today) {
+      res.status(400).json({ message: 'Valid date cannot be in the past' });
+      return null;
+    }
+    const code = await generateUniqueGatePassCode(req.schemaName);
+    return {
+      code,
+      visitor_name: String(visitor_name).trim(),
+      visitor_phone: body.visitor_phone || '',
+      notes: typeof body.notes === 'string' ? body.notes : '',
+      valid_date,
+      flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
+      resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
+      resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
+      status: 'active',
+      used_at: null,
+      used_by: null,
+    };
+  }
   if (entity === 'Visitor') {
     if (!isValidPhone(body.visitor_phone)) {
       return denyWrite(res, 'Visitor phone number must be exactly 10 digits');
@@ -1755,6 +1810,22 @@ function authorizeUpdate(req, res, entity, record, patch) {
       const keys = Object.keys(body);
       const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
       return onlyCancel ? body : denyWrite(res, 'You can only cancel your own pre-approval');
+    }
+    return denyWrite(res);
+  }
+    if (entity === 'GatePass') {
+    if (user.role === 'admin') {
+      if ('status' in body && !['active', 'used', 'cancelled'].includes(body.status)) {
+        return denyWrite(res, 'Invalid status');
+      }
+      return body;
+    }
+    if (isResident(user) && sameEmail(user, record)) {
+      const keys = Object.keys(body);
+      const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
+      if (!onlyCancel) return denyWrite(res, 'You can only cancel your own gate pass');
+      if (record.status !== 'active') return denyWrite(res, 'This gate pass is no longer active');
+      return body;
     }
     return denyWrite(res);
   }
@@ -1974,7 +2045,45 @@ entityRouter.delete('/:name/:id', wrap(async (req, res) => {
 }));
 
 app.use('/api/entities', entityRouter);
+app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async (req, res) => {
+  const user = req.user;
+  if (user.role !== 'guard' && user.role !== 'admin') {
+    return res.status(403).json({ message: 'Only security and admins can verify gate passes' });
+  }
+  const code = String(req.body?.code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ message: 'Gate pass code is required' });
 
+  const passes = await listEntity(req.schemaName, 'GatePass');
+  const pass = passes.find((p) => p.code === code);
+  if (!pass) return res.status(404).json({ message: 'No gate pass found with that code' });
+  if (pass.status === 'cancelled') return res.status(409).json({ message: 'This gate pass was cancelled' });
+  if (pass.status === 'used') {
+    return res.status(409).json({
+      message: `Already used${pass.used_at ? ' at ' + new Date(pass.used_at).toLocaleString() : ''}`,
+    });
+  }
+  if (pass.valid_date !== todayStr()) {
+    return res.status(409).json({ message: `This pass is valid for ${pass.valid_date}, not today` });
+  }
+
+  const updatedPass = { ...pass, status: 'used', used_at: nowIso(), used_by: user.email, updated_date: nowIso() };
+  await updateEntityRecord(req.schemaName, 'GatePass', pass.id, updatedPass);
+  broadcast(req.schemaName, 'GatePass', 'update', updatedPass);
+
+  const visitorRecord = await buildRecord(req.schemaName, 'Visitor', {
+    visitor_name: pass.visitor_name,
+    visitor_phone: pass.visitor_phone || '',
+    flat_number: pass.flat_number,
+    resident_email: pass.resident_email,
+    status: 'approved',
+    check_in_time: nowIso(),
+    gate_pass_id: pass.id,
+  }, user);
+  await insertEntityRecord(req.schemaName, 'Visitor', visitorRecord);
+  broadcast(req.schemaName, 'Visitor', 'create', visitorRecord);
+
+  res.json({ success: true, gate_pass: updatedPass, visitor: visitorRecord });
+}));
 app.use('/api', (_req, res) => res.status(404).json({ message: 'Not found' }));
 
 // eslint-disable-next-line no-unused-vars

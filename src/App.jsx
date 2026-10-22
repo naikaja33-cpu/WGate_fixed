@@ -21,6 +21,7 @@ import { Toaster as SonnerToaster } from 'sonner';
 import Signup from '@/pages/Signup';
 import Amenities from '@/pages/Amenities';
 import PreApprovals from '@/pages/PreApprovals';
+import GatePasses from '@/pages/GatePasses';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -73,6 +74,7 @@ const AuthenticatedApp = () => {
         <Route path="/PreApprovals" element={<PreApprovals />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
+      <Route path="/GatePasses" element={<GatePasses />} />
     </Routes>
   );
 };

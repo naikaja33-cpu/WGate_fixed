@@ -15,7 +15,7 @@ const navItems = {
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Members', icon: UserCog, label: 'Members' },
     { path: '/Profile', icon: User, label: 'Profile' },
-    { path: '/PreApprovals', icon: UserCheck, label: 'Pre-Approve' },
+    
   ],
   tenant: [
     { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },

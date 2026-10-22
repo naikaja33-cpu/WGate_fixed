@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, IndianRupee, Bell, UserCheck, ChevronRight } from 'lucide-react';
+import { Users, Wrench, Clock, CheckCircle2, AlertTriangle, IndianRupee, Bell, UserCheck,KeyRound, ChevronRight } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import TicketCard from '@/components/tickets/TicketCard';
@@ -122,6 +122,39 @@ export default function Dashboard() {
         </div>
         <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
       </Link>
+            <div className="grid grid-cols-2 gap-3">
+        <Link
+          to="/PreApprovals"
+          className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <UserCheck className="w-4 h-4 text-primary" />
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground text-sm">Pre-Approve</p>
+            <p className="text-xs text-muted-foreground">Guest / Maid / Cook</p>
+          </div>
+        </Link>
+
+        <Link
+          to="/GatePasses"
+          className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <KeyRound className="w-4 h-4 text-primary" />
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground text-sm">Gate Pass</p>
+            <p className="text-xs text-muted-foreground">One-time entry code</p>
+          </div>
+        </Link>
+      </div>
       {showNotices && notices.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
