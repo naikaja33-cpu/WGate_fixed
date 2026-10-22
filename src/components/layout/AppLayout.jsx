@@ -25,7 +25,7 @@ const navItems = {
     { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
-    { path: '/PreApprovals', icon: UserCheck, label: 'Pre-Approve' },
+    
   ],
   owner: [
     { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
@@ -35,7 +35,7 @@ const navItems = {
     { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
     { path: '/Billing', icon: IndianRupee, label: 'Billing' },
     { path: '/Profile', icon: User, label: 'Profile' },
-    { path: '/PreApprovals', icon: UserCheck, label: 'Pre-Approve' },
+    
   ],
   guard: [
     { path: '/Visitors', icon: Shield, label: 'Gate' },
