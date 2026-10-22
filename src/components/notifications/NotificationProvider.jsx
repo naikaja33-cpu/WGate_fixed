@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { wgate } from '@/api/wgateClient';
+import { wgate ,ENTITY_NAMES } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 
