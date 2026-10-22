@@ -1354,7 +1354,7 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
 }));
 /* Super admin chooses which menu sections a society can use. Stored in that
    society's own SocietySettings record, which the app already reads. */
-const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing','Amenities'];
+const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing','Amenities','PreApprovals', 'GatePasses'];
 
 // Which entity belongs to which menu section. A switched-off section is
 // blocked on the API too, not just hidden in the nav.
