@@ -194,8 +194,8 @@ export default function GatePasses() {
               <Label>Phone (optional)</Label>
               <Input
                 value={form.visitor_phone}
-                onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                placeholder="10-digit number"
+                onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 15) }))}
+                placeholder="Phone number (optional)"
                 inputMode="numeric"
               />
             </div>

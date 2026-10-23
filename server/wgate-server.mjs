@@ -211,7 +211,11 @@ const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const normEmail = (email) => String(email || '').trim().toLowerCase();
-const isValidPhone = (phone) => !phone || /^\d{10}$/.test(String(phone));
+const isValidPhone = (phone) => {
+  if (!phone) return true;
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+};
 
 /* ------------------------------------------------------------------ */
 /* Postgres connection                                                */

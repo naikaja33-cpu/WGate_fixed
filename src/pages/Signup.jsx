@@ -25,18 +25,23 @@ export default function Signup() {
   const [submitted, setSubmitted] = useState(null); // { society } once signed up
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-// Digits only, capped at 10 — matches the backend's isValidPhone check.
+
+  // Digits only, capped at 15 — matches the backend's isValidPhone check
+  // (accepts a 10-digit Indian number or an international number with a
+  // country code).
   const setPhone = (e) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 15);
     setForm((f) => ({ ...f, phone: digits }));
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.society_name.trim()) return setError('Society name is required');
     if (!form.email.trim()) return setError('Email is required');
     if (!form.password || form.password.length < 6) return setError('Password must be at least 6 characters');
-    if (form.phone && form.phone.length !== 10) return setError('Phone number must be exactly 10 digits');
+    if (form.phone && (form.phone.length < 7 || form.phone.length > 15)) return setError('Enter a valid phone number');
+
     setIsSubmitting(true);
     try {
       const result = await wgate.auth.signup({
@@ -66,7 +71,7 @@ export default function Signup() {
             Thanks! <span className="font-medium">{submitted.society?.name}</span> has been created.
           </p>
           <p className="text-sm text-muted-foreground">
-            {submitted.message || 'A super admin will review and approve your society before you can sign in. You\u2019ll get your 14-day trial as soon as it\u2019s approved.'}
+            {submitted.message || 'A super admin will review and approve your society before you can sign in. You’ll get your 14-day trial as soon as it’s approved.'}
           </p>
           <Link to="/" className="inline-block">
             <Button className="w-full mt-2">Back to Sign In</Button>
@@ -119,7 +124,7 @@ export default function Signup() {
             <Label htmlFor="signup-email">Email *</Label>
             <Input id="signup-email" type="email" autoComplete="username" value={form.email} onChange={setField('email')} required />
           </div>
-                    <div className="space-y-1.5">
+          <div className="space-y-1.5">
             <Label htmlFor="signup-phone">Phone</Label>
             <Input
               id="signup-phone"
@@ -129,7 +134,7 @@ export default function Signup() {
               maxLength={10}
               value={form.phone}
               onChange={setPhone}
-              placeholder="10-digit mobile number"
+              placeholder="Mobile number (with country code if not Indian)"
             />
           </div>
           <div className="space-y-1.5">

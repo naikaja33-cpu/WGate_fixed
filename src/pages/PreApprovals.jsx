@@ -81,8 +81,9 @@ export default function PreApprovals() {
       setFormError('Visitor name is required');
       return;
     }
-    if (!/^\d{10}$/.test(form.visitor_phone)) {
-      setFormError('Phone number must be exactly 10 digits');
+    const phoneDigits = form.visitor_phone.replace(/\D/g, '');
+    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+      setFormError('Enter a valid phone number');
       return;
     }
     if (form.frequency === 'daily' && !form.valid_until) {
@@ -142,8 +143,8 @@ export default function PreApprovals() {
               <Label>Phone number</Label>
               <Input
                 value={form.visitor_phone}
-                onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                placeholder="10-digit number"
+                onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 15) }))}
+                placeholder="Phone number (with country code if not Indian)"
                 inputMode="numeric"
                 required
               />

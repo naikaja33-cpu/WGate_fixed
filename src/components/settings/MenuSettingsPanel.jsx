@@ -34,8 +34,9 @@ export default function MenuSettingsPanel() {
   }, [user?.society_id]);
 
   const saveWhatsappNumber = async () => {
-    if (whatsappNumber && !/^\d{10}$/.test(whatsappNumber)) {
-      toast.error('Enter a 10-digit phone number, or leave it blank to turn off WhatsApp alerts');
+    const digits = whatsappNumber.replace(/\D/g, '');
+    if (whatsappNumber && (digits.length < 7 || digits.length > 15)) {
+      toast.error('Enter a valid phone number, or leave it blank to turn off WhatsApp alerts');
       return;
     }
     setSavingWhatsapp(true);
@@ -97,8 +98,8 @@ export default function MenuSettingsPanel() {
         <div className="flex gap-2">
           <Input
             value={whatsappNumber}
-            onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            placeholder="10-digit admin/guard number"
+            onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, '').slice(0, 15))}
+            placeholder="Admin/guard number (with country code if not Indian)"
             inputMode="numeric"
           />
           <Button size="sm" onClick={saveWhatsappNumber} disabled={savingWhatsapp}>
