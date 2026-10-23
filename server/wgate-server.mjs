@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval','GatePass'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -121,9 +121,9 @@ const ENTITY_DEFAULTS = {
   PreApproval: { status: 'active' },
   GatePass: { status: 'active' },
 };
-// Pre-approval categories residents can create. Add/remove names here to change what shows
-const PRE_APPROVAL_CATEGORIES = ['Guest', 'Maid', 'Cook', 'Nanny', 'Driver', 'Delivery', 'Other'];
 
+// Characters a gate pass code is built from — no 0/O or 1/I/L, so a guard
+// reading it off a phone screen never has to guess which character it is.
 const GATE_PASS_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function randomGatePassCode() {
   let code = '';
@@ -141,14 +141,32 @@ async function generateUniqueGatePassCode(schemaName) {
   }
   return code;
 }
+
+// Who a pre-approval can be registered for. Keep this in sync with the
+// PRE_APPROVAL_CATEGORIES list in src/pages/PreApprovals.jsx.
+const PRE_APPROVAL_CATEGORIES = ['Guest', 'Maid', 'Cook', 'Nanny', 'Driver', 'Delivery', 'Other'];
+
 // Amenities residents can book. Add/remove names here to change what shows
 // up in the booking form — no other code needs to change.
 const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
+
 // Two time ranges (both "HH:MM" 24h strings) overlap if one starts before
 // the other ends, in both directions.
 const timesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+
 const ROLES = ['admin', 'tenant', 'owner', 'guard'];
 const SELF_EDITABLE_FIELDS = ['full_name', 'phone', 'flat_number'];
+
+/* ------------------------------------------------------------------ */
+/* WhatsApp notifications (Twilio)                                    */
+/* Configure via env vars: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,     */
+/* TWILIO_WHATSAPP_FROM (e.g. "whatsapp:+14155238886" for the Twilio  */
+/* sandbox, or your own approved WhatsApp sender number).             */
+/* If these aren't set, sends are skipped — never blocks the request. */
+/* ------------------------------------------------------------------ */
+
+// Turns a stored 10-digit phone (or anything already with a country code)
+// into Twilio's required "whatsapp:+<countrycode><number>" format.
 function toWhatsAppAddress(phone, countryCode = '91') {
   if (!phone) return null;
   const digits = String(phone).replace(/\D/g, '');
@@ -211,11 +229,7 @@ const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const normEmail = (email) => String(email || '').trim().toLowerCase();
-const isValidPhone = (phone) => {
-  if (!phone) return true;
-  const digits = String(phone).replace(/\D/g, '');
-  return digits.length >= 7 && digits.length <= 15;
-};
+const isValidPhone = (phone) => !phone || /^\d{10}$/.test(String(phone));
 
 /* ------------------------------------------------------------------ */
 /* Postgres connection                                                */
@@ -812,25 +826,7 @@ const clean = (entity, record) => (entity === 'User' ? publicUser(record) : reco
 /* ------------------------------------------------------------------ */
 
 const app = express();
-const ALLOWED_ORIGINS = [
-  'https://wwgate.in',
-  'https://www.wwgate.in',
-  'https://naikaja33-cpu.github.io',
-  'https://localhost',      // Android app (Capacitor WebView)
-  'capacitor://localhost',  // iOS app, if you ever build one
-  'http://localhost:5173',  // local dev (Vite)
-];
-
-
-app.use(cors({
-  origin(origin, callback) {
-    // Allow no-origin requests (native mobile shell, curl, server-to-server)
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-}));
-
+app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
@@ -1391,7 +1387,7 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
 }));
 /* Super admin chooses which menu sections a society can use. Stored in that
    society's own SocietySettings record, which the app already reads. */
-const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing','Amenities','PreApprovals', 'GatePasses'];
+const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing', 'Amenities', 'PreApprovals', 'GatePasses'];
 
 // Which entity belongs to which menu section. A switched-off section is
 // blocked on the API too, not just hidden in the nav.
@@ -1401,8 +1397,10 @@ const MENU_FOR_ENTITY = {
   Notice: 'NoticeBoard',
   MaintenanceBill: 'Billing',
   AmenityBooking: 'Amenities',
+  // Rides along with the existing Visitors toggle — no new super admin
+  // menu entry needed, since pre-approvals are part of gate management.
   PreApproval: 'Visitors',
-    GatePass: 'Visitors',
+  GatePass: 'Visitors',
 };
 const menuCache = new Map(); // schemaName -> { menus, expires }
 
@@ -1606,10 +1604,12 @@ function canRead(user, entity, record) {
     // the booking form can show which slots are already taken.
     case 'AmenityBooking': return true;
     case 'Visitor': return isStaff(user) || sameFlat(user, record);
+    // Guards need to see the list too, to recognize an expected daily
+    // maid/cook/nanny or guest at the gate.
+    case 'PreApproval': return isStaff(user) || sameFlat(user, record);
+    case 'GatePass': return isStaff(user) || sameFlat(user, record);
     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
     case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
-    case 'PreApproval': return isStaff(user) || sameFlat(user, record);
-        case 'GatePass': return isStaff(user) || sameFlat(user, record);
     default: return false;
   }
 }
@@ -1629,7 +1629,6 @@ const denyWrite = (res, message = 'You do not have permission to do that') => {
 const pickDefined = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
-// Returns the record input to store (sanitized), or null after sending a 403.
 // Returns the record input to store (sanitized), or null after sending an
 // error response (403 for permission, 400/409 for bad/conflicting bookings).
 async function authorizeCreate(req, res, entity, input) {
@@ -1656,6 +1655,9 @@ async function authorizeCreate(req, res, entity, input) {
       return null;
     }
     const existing = await listEntity(req.schemaName, 'AmenityBooking');
+    // Pending requests block the slot too (not just confirmed ones) so two
+    // residents can't both get told "pending" for the same time and leave
+    // the admin to sort out a clash. Rejected/cancelled bookings free the slot.
     const conflict = existing.find((b) =>
       b.amenity === amenity &&
       b.booking_date === booking_date &&
@@ -1664,7 +1666,6 @@ async function authorizeCreate(req, res, entity, input) {
       timesOverlap(start_time, end_time, b.start_time, b.end_time)
     );
     if (conflict) {
-      //res.status(409).json({ message: `${amenity} is already booked for part of that time on ${booking_date}` });
       res.status(409).json({ message: `${amenity} is already booked (or pending approval) for part of that time on ${booking_date}` });
       return null;
     }
@@ -1677,10 +1678,13 @@ async function authorizeCreate(req, res, entity, input) {
       flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
       resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
       resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
+      // New bookings need admin approval before they're confirmed. Admins
+      // booking on behalf of a resident still go through the same queue —
+      // keeps the approval list the single source of truth.
       status: 'pending',
     };
   }
-    if (entity === 'PreApproval') {
+  if (entity === 'PreApproval') {
     if (!isResident(user) && user.role !== 'admin') {
       return denyWrite(res, 'Only residents and admins can create pre-approvals');
     }
@@ -1705,6 +1709,7 @@ async function authorizeCreate(req, res, entity, input) {
     let valid_from = body.valid_from || today;
     let valid_until = body.valid_until;
     if (frequency === 'once') {
+      // A one-time pass is only good for the single day it's for.
       valid_until = valid_from;
     } else {
       if (!valid_until) {
@@ -1730,7 +1735,7 @@ async function authorizeCreate(req, res, entity, input) {
       status: 'active',
     };
   }
-    if (entity === 'GatePass') {
+  if (entity === 'GatePass') {
     if (!isResident(user) && user.role !== 'admin') {
       return denyWrite(res, 'Only residents and admins can create a gate pass');
     }
@@ -1772,6 +1777,9 @@ async function authorizeCreate(req, res, entity, input) {
     if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
     delete body.check_out_time;
 
+    // Skip the resident-approval wait when there's an active, currently
+    // valid pre-approval for this phone number — the whole point of
+    // pre-approving a recurring maid/cook/nanny or an expected guest.
     const today = todayStr();
     const preApprovals = body.visitor_phone ? await listEntity(req.schemaName, 'PreApproval') : [];
     const match = preApprovals.find((p) =>
@@ -1785,18 +1793,8 @@ async function authorizeCreate(req, res, entity, input) {
       body.flat_number = body.flat_number || match.flat_number;
       body.pre_approval_id = match.id;
     } else {
-      body.status = 'pending';
+      body.status = 'pending'; // guards cannot pre-approve their own check-ins
     }
-    return body;
-  }
-  if (entity === 'Visitor') {
-    if (!isValidPhone(body.visitor_phone)) {
-      return denyWrite(res, 'Visitor phone number must be exactly 10 digits');
-    }
-    if (user.role === 'admin') return body;
-    if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
-    delete body.check_out_time;
-    body.status = 'pending'; // guards cannot pre-approve their own check-ins
     return body;
   }
   if (entity === 'ServiceTicket') {
@@ -1819,11 +1817,11 @@ function authorizeUpdate(req, res, entity, record, patch) {
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
-    if (entity === 'ServiceTicket') {
+  if (entity === 'ServiceTicket') {
     return user.role === 'admin' ? body : denyWrite(res, 'Only admins can update tickets');
   }
   if (entity === 'AmenityBooking') {
-    if (user.role === 'admin'){
+    if (user.role === 'admin') {
       if ('status' in body && !['pending', 'confirmed', 'rejected', 'cancelled'].includes(body.status)) {
         return denyWrite(res, 'Invalid booking status');
       }
@@ -1836,7 +1834,7 @@ function authorizeUpdate(req, res, entity, record, patch) {
     }
     return denyWrite(res);
   }
-    if (entity === 'PreApproval') {
+  if (entity === 'PreApproval') {
     if (user.role === 'admin') {
       if ('status' in body && !['active', 'cancelled'].includes(body.status)) {
         return denyWrite(res, 'Invalid status');
@@ -1850,7 +1848,7 @@ function authorizeUpdate(req, res, entity, record, patch) {
     }
     return denyWrite(res);
   }
-    if (entity === 'GatePass') {
+  if (entity === 'GatePass') {
     if (user.role === 'admin') {
       if ('status' in body && !['active', 'used', 'cancelled'].includes(body.status)) {
         return denyWrite(res, 'Invalid status');
@@ -1910,7 +1908,7 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
   if (first && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     const record = await getEntityRecord(req.schemaName, entity, first);
     if (!record) return next(); // the route itself returns the 404
-        if (req.method === 'DELETE') {
+    if (req.method === 'DELETE') {
       if (!canDelete(req.user, entity, record)) return denyWrite(res, 'You do not have permission to delete this');
       return next();
     }
@@ -2001,7 +1999,24 @@ entityRouter.post('/:name/bulk', wrap(async (req, res) => {
     }
     created.forEach((r) => broadcast(req.schemaName, entity, 'create', r));
     res.status(201).json(created.map((r) => clean(entity, r)));
-        if (entity === 'ServiceTicket') {
+  } catch (err) {
+    res.status(err.status || 400).json({ message: err.message });
+  }
+}));
+
+entityRouter.post('/:name', wrap(async (req, res) => {
+  if (!assertUserWriteAllowed(req, res)) return;
+  const entity = req.params.name;
+  try {
+    const record = await buildRecord(req.schemaName, entity, req.body || {}, req.user, req.society);
+    await insertEntityRecord(req.schemaName, entity, record);
+    broadcast(req.schemaName, entity, 'create', record);
+    res.status(201).json(clean(entity, record));
+
+    // Fire-and-forget: notify the society's configured WhatsApp number
+    // about the new ticket. Never awaited — a slow/failed WhatsApp send
+    // must not delay or break the actual ticket creation.
+    if (entity === 'ServiceTicket') {
       listEntity(req.schemaName, 'SocietySettings')
         .then(([settings]) => {
           const to = settings?.ticket_whatsapp_number;
@@ -2018,19 +2033,6 @@ entityRouter.post('/:name/bulk', wrap(async (req, res) => {
         })
         .catch((err) => console.error('[whatsapp] ticket-create notify failed:', err.message));
     }
-  } catch (err) {
-    res.status(err.status || 400).json({ message: err.message });
-  }
-}));
-
-entityRouter.post('/:name', wrap(async (req, res) => {
-  if (!assertUserWriteAllowed(req, res)) return;
-  const entity = req.params.name;
-  try {
-    const record = await buildRecord(req.schemaName, entity, req.body || {}, req.user, req.society);
-    await insertEntityRecord(req.schemaName, entity, record);
-    broadcast(req.schemaName, entity, 'create', record);
-    res.status(201).json(clean(entity, record));
   } catch (err) {
     res.status(err.status || 400).json({ message: err.message });
   }
@@ -2078,7 +2080,11 @@ async function updateHandler(req, res) {
   await updateEntityRecord(req.schemaName, entity, req.params.id, updated);
   broadcast(req.schemaName, entity, 'update', updated);
   res.json(clean(entity, updated));
-    if (entity === 'ServiceTicket') {
+
+  // Fire-and-forget: notify the resident over WhatsApp the moment their
+  // ticket is actually closed (not on every edit — only on the transition
+  // into resolved/closed), using the phone number on their own User record.
+  if (entity === 'ServiceTicket') {
     const CLOSED_STATUSES = ['resolved', 'closed'];
     const justClosed = CLOSED_STATUSES.includes(updated.status) && !CLOSED_STATUSES.includes(record.status);
     if (justClosed && updated.resident_email) {
@@ -2112,6 +2118,10 @@ entityRouter.delete('/:name/:id', wrap(async (req, res) => {
 }));
 
 app.use('/api/entities', entityRouter);
+
+// Security scans/types in a gate pass code — no resident approval needed,
+// the code itself is the approval. Marks the pass used and logs a normal,
+// already-approved Visitor entry so it shows up in the usual history too.
 app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async (req, res) => {
   const user = req.user;
   if (user.role !== 'guard' && user.role !== 'admin') {
@@ -2133,7 +2143,13 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
     return res.status(409).json({ message: `This pass is valid for ${pass.valid_date}, not today` });
   }
 
-  const updatedPass = { ...pass, status: 'used', used_at: nowIso(), used_by: user.email, updated_date: nowIso() };
+  const updatedPass = {
+    ...pass,
+    status: 'used',
+    used_at: nowIso(),
+    used_by: user.email,
+    updated_date: nowIso(),
+  };
   await updateEntityRecord(req.schemaName, 'GatePass', pass.id, updatedPass);
   broadcast(req.schemaName, 'GatePass', 'update', updatedPass);
 
@@ -2151,6 +2167,7 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
 
   res.json({ success: true, gate_pass: updatedPass, visitor: visitorRecord });
 }));
+
 app.use('/api', (_req, res) => res.status(404).json({ message: 'Not found' }));
 
 // eslint-disable-next-line no-unused-vars

@@ -75,7 +75,12 @@ export default function Profile() {
               inputMode="numeric"
               placeholder="Phone number (with country code if not Indian)"
               value={phone}
-              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 15))}
+              onChange={e => {
+                const raw = e.target.value;
+                const hasPlus = raw.trim().startsWith('+');
+                const digits = raw.replace(/\D/g, '').slice(0, 15);
+                setPhone(hasPlus ? `+${digits}` : digits);
+              }}
               maxLength={15}
             />
             {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
