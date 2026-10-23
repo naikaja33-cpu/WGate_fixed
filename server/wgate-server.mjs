@@ -229,7 +229,11 @@ const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const normEmail = (email) => String(email || '').trim().toLowerCase();
-const isValidPhone = (phone) => !phone || /^\d{10}$/.test(String(phone));
+const isValidPhone = (phone) => {
+  if (!phone) return true;
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+};
 
 /* ------------------------------------------------------------------ */
 /* Postgres connection                                                */
@@ -865,8 +869,8 @@ app.post('/api/signup', wrap(async (req, res) => {
   if (!password || String(password).length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
   }
-  if (!isValidPhone(req.body?.phone)) {
-    return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+    if (!isValidPhone(req.body?.phone)) {
+    return res.status(400).json({ message: 'Enter a valid phone number' });
   }
 
   const society = await createSocietyRecord({
@@ -968,8 +972,8 @@ app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
   for (const key of SELF_EDITABLE_FIELDS) {
     if (req.body && Object.prototype.hasOwnProperty.call(req.body, key)) patch[key] = req.body[key];
   }
-  if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
-    return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+    if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
+    return res.status(400).json({ message: 'Enter a valid phone number' });
   }
   const updated = { ...req.user, ...patch, updated_date: nowIso() };
   await updateEntityRecord(req.schemaName, 'User', updated.id, updated);
@@ -1076,8 +1080,8 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
   if (!String(req.body?.phone || '').trim()) {
       return res.status(400).json({ message: 'Phone number is required' });
     }
-  if (!isValidPhone(req.body?.phone)) {
-    return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+    if (!isValidPhone(req.body?.phone)) {
+    return res.status(400).json({ message: 'Enter a valid phone number' });
   }
   if (!String(req.body?.flat_number || '').trim()) {
       return res.status(400).json({ message: 'Flat number is required' });
@@ -1694,7 +1698,7 @@ async function authorizeCreate(req, res, entity, input) {
       return null;
     }
     if (!visitor_phone || !isValidPhone(visitor_phone)) {
-      res.status(400).json({ message: 'A valid 10-digit phone number is required' });
+      res.status(400).json({ message: 'Enter a valid phone number' });
       return null;
     }
     if (!PRE_APPROVAL_CATEGORIES.includes(category)) {
@@ -1745,7 +1749,7 @@ async function authorizeCreate(req, res, entity, input) {
       return null;
     }
     if (body.visitor_phone && !isValidPhone(body.visitor_phone)) {
-      res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+      res.status(400).json({ message: 'Enter a valid phone number' });
       return null;
     }
     const today = todayStr();
@@ -1771,7 +1775,7 @@ async function authorizeCreate(req, res, entity, input) {
   }
   if (entity === 'Visitor') {
     if (!isValidPhone(body.visitor_phone)) {
-      return denyWrite(res, 'Visitor phone number must be exactly 10 digits');
+      return denyWrite(res, 'Enter a valid visitor phone number');
     }
     if (user.role === 'admin') return body;
     if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
@@ -2062,7 +2066,7 @@ async function updateHandler(req, res) {
       }
     }
     if (patch.phone !== undefined && !isValidPhone(patch.phone)) {
-      return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+      return res.status(400).json({ message: 'Enter a valid phone number' });
     }
     if (patch.password) {
       patch.password_hash = hashPassword(patch.password);
