@@ -149,6 +149,39 @@ const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Co
 const timesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 const ROLES = ['admin', 'tenant', 'owner', 'guard'];
 const SELF_EDITABLE_FIELDS = ['full_name', 'phone', 'flat_number'];
+function toWhatsAppAddress(phone, countryCode = '91') {
+  if (!phone) return null;
+  const digits = String(phone).replace(/\D/g, '');
+  if (!digits) return null;
+  const withCountry = digits.length === 10 ? `${countryCode}${digits}` : digits;
+  return `whatsapp:+${withCountry}`;
+}
+
+async function sendWhatsAppMessage(toPhone, body) {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  if (!sid || !token || !from) {
+    console.warn('[whatsapp] Twilio not configured — skipping message');
+    return;
+  }
+  const to = toWhatsAppAddress(toPhone);
+  if (!to) return;
+  try {
+    const auth = Buffer.from(`${sid}:${token}`).toString('base64');
+    const params = new URLSearchParams({ From: from, To: to, Body: body });
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    });
+    if (!res.ok) {
+      console.error('[whatsapp] Twilio send failed:', res.status, await res.text().catch(() => ''));
+    }
+  } catch (err) {
+    console.error('[whatsapp] Twilio send error:', err.message);
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Password + token helpers (node:crypto only)                        */
@@ -1964,6 +1997,23 @@ entityRouter.post('/:name/bulk', wrap(async (req, res) => {
     }
     created.forEach((r) => broadcast(req.schemaName, entity, 'create', r));
     res.status(201).json(created.map((r) => clean(entity, r)));
+        if (entity === 'ServiceTicket') {
+      listEntity(req.schemaName, 'SocietySettings')
+        .then(([settings]) => {
+          const to = settings?.ticket_whatsapp_number;
+          if (!to) return;
+          const msg = [
+            '🔧 New Service Ticket',
+            `Flat: ${record.flat_number || '—'}`,
+            `Title: ${record.title || '—'}`,
+            record.category ? `Category: ${record.category}` : null,
+            record.priority ? `Priority: ${record.priority}` : null,
+            record.description ? `Details: ${record.description}` : null,
+          ].filter(Boolean).join('\n');
+          return sendWhatsAppMessage(to, msg);
+        })
+        .catch((err) => console.error('[whatsapp] ticket-create notify failed:', err.message));
+    }
   } catch (err) {
     res.status(err.status || 400).json({ message: err.message });
   }
@@ -2024,6 +2074,19 @@ async function updateHandler(req, res) {
   await updateEntityRecord(req.schemaName, entity, req.params.id, updated);
   broadcast(req.schemaName, entity, 'update', updated);
   res.json(clean(entity, updated));
+    if (entity === 'ServiceTicket') {
+    const CLOSED_STATUSES = ['resolved', 'closed'];
+    const justClosed = CLOSED_STATUSES.includes(updated.status) && !CLOSED_STATUSES.includes(record.status);
+    if (justClosed && updated.resident_email) {
+      findUserByEmail(req.schemaName, updated.resident_email)
+        .then((resident) => {
+          if (!resident?.phone) return;
+          const msg = `✅ Your service ticket "${updated.title || ''}" has been marked ${updated.status}. Thank you for your patience!`;
+          return sendWhatsAppMessage(resident.phone, msg);
+        })
+        .catch((err) => console.error('[whatsapp] ticket-closed notify failed:', err.message));
+    }
+  }
 }
 entityRouter.put('/:name/:id', wrap(updateHandler));
 entityRouter.patch('/:name/:id', wrap(updateHandler));
