@@ -131,7 +131,7 @@ export default function Signup() {
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              maxLength={10}
+              maxLength={15}
               value={form.phone}
               onChange={setPhone}
               placeholder="Mobile number (with country code if not Indian)"

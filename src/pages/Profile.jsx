@@ -9,7 +9,7 @@ import { User, Phone, Home, Mail, Shield, LogOut } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 
 export default function Profile() {
-  const { user,logout, refreshUser } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [flat, setFlat] = useState(user?.flat_number || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [saved, setSaved] = useState(false);
@@ -22,10 +22,12 @@ export default function Profile() {
       if (refreshUser) refreshUser();
       setTimeout(() => setSaved(false), 2000);
     },
+    onError: (err) => setPhoneError(err?.message || 'Failed to save'),
   });
 
   const handleSave = () => {
-    if (phone && (phone.length < 7 || phone.length > 15)) {
+    const digitCount = phone.replace(/\D/g, '').length;
+    if (phone && (digitCount < 7 || digitCount > 15)) {
       setPhoneError('Enter a valid phone number');
       return;
     }
@@ -72,7 +74,7 @@ export default function Profile() {
             </Label>
             <Input
               type="tel"
-              inputMode="numeric"
+              inputMode="tel"
               placeholder="Phone number (with country code if not Indian)"
               value={phone}
               onChange={e => {
@@ -81,7 +83,7 @@ export default function Profile() {
                 const digits = raw.replace(/\D/g, '').slice(0, 15);
                 setPhone(hasPlus ? `+${digits}` : digits);
               }}
-              maxLength={15}
+              maxLength={16}
             />
             {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>
