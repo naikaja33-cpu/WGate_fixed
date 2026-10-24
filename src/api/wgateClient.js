@@ -182,7 +182,14 @@ const superadmin = {
     return request(`/superadmin/admins/${id}/reset-password`, { method: 'POST', body: { society_id: societyId } });
   },
 };
-
+const admin = {
+  async getWhatsappNumber() {
+    return request('/admin/whatsapp-number');
+  },
+  async updateWhatsappNumber(number) {
+    return request('/admin/whatsapp-number', { method: 'PATCH', body: { ticket_whatsapp_number: number } });
+  },
+};
 const users = {
     async resetPassword(id) {
     return request(`/users/${id}/reset-password`, { method: 'POST' });
@@ -323,6 +330,7 @@ export const wgate = {
   flats,
   superadmin,
   gatePass,
+  admin,
 };
 
 export default wgate;

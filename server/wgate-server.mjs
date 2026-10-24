@@ -2120,7 +2120,32 @@ entityRouter.delete('/:name/:id', wrap(async (req, res) => {
   broadcast(req.schemaName, entity, 'delete', record);
   res.json({ success: true });
 }));
+app.get('/api/admin/whatsapp-number', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  const [settings] = await listEntity(req.schemaName, 'SocietySettings');
+  res.json({ ticket_whatsapp_number: settings?.ticket_whatsapp_number || '' });
+}));
 
+app.patch('/api/admin/whatsapp-number', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  const raw = String(req.body?.ticket_whatsapp_number || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (raw && (digits.length < 7 || digits.length > 15)) {
+    return res.status(400).json({ message: 'Enter a valid phone number, or leave it blank to turn off WhatsApp alerts' });
+  }
+  const [existing] = await listEntity(req.schemaName, 'SocietySettings');
+  if (existing) {
+    const updated = { ...existing, ticket_whatsapp_number: raw, updated_date: nowIso() };
+    await updateEntityRecord(req.schemaName, 'SocietySettings', existing.id, updated);
+    return res.json({ ticket_whatsapp_number: updated.ticket_whatsapp_number });
+  }
+  const created = {
+    ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
+    society_id: req.society.id,
+    society_name: req.society.name,
+    ticket_whatsapp_number: raw,
+  };
+  await insertEntityRecord(req.schemaName, 'SocietySettings', created);
+  res.status(201).json({ ticket_whatsapp_number: created.ticket_whatsapp_number });
+}));
 app.use('/api/entities', entityRouter);
 
 // Security scans/types in a gate pass code — no resident approval needed,

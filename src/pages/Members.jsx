@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import UserManagementSection from '@/components/users/UserManagementSection';
+import AdminWhatsappSettings from '@/components/settings/AdminWhatsappSettings';
 
 export default function Members() {
   const { user } = useAuth();
@@ -18,6 +19,8 @@ export default function Members() {
       </div>
 
       <UserManagementSection />
+      
+      <AdminWhatsappSettings />
     </div>
   );
 }
