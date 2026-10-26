@@ -47,7 +47,9 @@ export default function TicketCard({ ticket, onUpdateStatus, isAdmin, isGuard })
             <span className="text-lg">{categoryIcons[ticket.category] || '📋'}</span>
             <h3 className="font-semibold text-foreground text-sm">{ticket.title}</h3>
           </div>
-          <p className="text-xs text-muted-foreground">Flat {ticket.flat_number}</p>
+          <p className="text-xs text-muted-foreground">
+            {ticket.ticket_number ? `${ticket.ticket_number} · ` : ''}Flat {ticket.flat_number}
+          </p>
         </div>
         <Badge className={`text-xs border ${statusStyles[ticket.status]} capitalize`}>
           {ticket.status?.replace('_', ' ')}

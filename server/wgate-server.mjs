@@ -1960,6 +1960,10 @@ async function buildRecord(schemaName, entity, input, actor, activeSociety) {
     record.society_id = activeSociety.id;
     record.society_name = activeSociety.name;
   }
+    if (entity === 'ServiceTicket') {
+    const count = await countEntity(schemaName, 'ServiceTicket');
+    record.ticket_number = `TKT-${String(count + 1).padStart(5, '0')}`;
+  }
   return record;
 }
 

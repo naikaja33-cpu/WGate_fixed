@@ -6,7 +6,7 @@ import AdminWhatsappSettings from '@/components/settings/AdminWhatsappSettings';
 export default function Members() {
   const { user } = useAuth();
 
-  // Members are managed by admins only.
+  // Members are managed by admins only.{/* <AdminWhatsappSettings /> */}
   if (user?.role !== 'admin') return <Navigate to="/Dashboard" replace />;
 
   return (
@@ -20,7 +20,7 @@ export default function Members() {
 
       <UserManagementSection />
       
-      <AdminWhatsappSettings />
+      
     </div>
   );
 }

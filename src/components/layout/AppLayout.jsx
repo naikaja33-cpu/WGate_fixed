@@ -43,7 +43,9 @@ const navItems = {
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
         { path: '/PreApprovals', icon: UserCheck, label: 'Pre-Approve' },
         { path: '/GatePasses', icon: KeyRound, label: 'Gate Pass' },
+        { path: '/Amenities', icon: CalendarClock, label: 'Amenities' },
         { path: '/Profile', icon: User, label: 'Profile' },
+        
   ],
 };
 
