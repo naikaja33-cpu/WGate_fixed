@@ -1642,7 +1642,7 @@ async function authorizeCreate(req, res, entity, input) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
   if (entity === 'AmenityBooking') {
-    if (!isResident(user) && user.role !== 'admin') {
+    if (!isResident(user) && user.role !== 'admin' && user.role !== 'guard') {
       return denyWrite(res, 'Only residents and admins can book amenities');
     }
     const { amenity, booking_date, start_time, end_time } = body;
@@ -1673,18 +1673,16 @@ async function authorizeCreate(req, res, entity, input) {
       res.status(409).json({ message: `${amenity} is already booked (or pending approval) for part of that time on ${booking_date}` });
       return null;
     }
+    const isStaffBooking = user.role === 'admin' || user.role === 'guard';
     return {
       amenity,
       booking_date,
       start_time,
       end_time,
       notes: typeof body.notes === 'string' ? body.notes : '',
-      flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
-      resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
-      resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
-      // New bookings need admin approval before they're confirmed. Admins
-      // booking on behalf of a resident still go through the same queue —
-      // keeps the approval list the single source of truth.
+      flat_number: isStaffBooking && body.flat_number ? body.flat_number : (user.flat_number || ''),
+      resident_email: isStaffBooking && body.resident_email ? normEmail(body.resident_email) : user.email,
+      resident_name: isStaffBooking && body.resident_name ? body.resident_name : (user.full_name || ''),
       status: 'pending',
     };
   }
