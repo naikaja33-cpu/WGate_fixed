@@ -1822,13 +1822,8 @@ function authorizeUpdate(req, res, entity, record, patch) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
   if (entity === 'ServiceTicket') {
-  if (user.role === 'admin') return body;
-  if (user.role === 'guard') {
-    // Guards may only set who a ticket is assigned to — never change its
-    // status or anything else.
-    return { assigned_to: body.assigned_to };
-  }
-  return denyWrite(res, 'Only admins can update tickets');
+  if (user.role === 'admin' || user.role === 'guard') return body;
+  return denyWrite(res, 'Only admins and security can update tickets');
 }
   if (entity === 'AmenityBooking') {
     if (user.role === 'admin') {

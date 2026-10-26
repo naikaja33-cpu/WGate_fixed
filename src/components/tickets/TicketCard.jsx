@@ -73,12 +73,12 @@ export default function TicketCard({ ticket, onUpdateStatus, isAdmin, isGuard })
           )}
         </div>
 
-        {isAdmin && nextStatus[ticket.status] && (
+        {(isAdmin || isGuard) && nextStatus[ticket.status] && (
           <Button size="sm" variant="ghost" className="text-xs h-7 text-primary" onClick={() => onUpdateStatus(ticket, nextStatus[ticket.status])}>
             {nextStatus[ticket.status].replace('_', ' ')} <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         )}
-        {isGuard && (
+        {(isAdmin || isGuard) && (
           <Button size="sm" variant="ghost" className="text-xs h-7 text-primary" onClick={() => setAssigning(v => !v)}>
             <UserCheck className="w-3 h-3 mr-1" /> Assign
           </Button>
@@ -89,7 +89,7 @@ export default function TicketCard({ ticket, onUpdateStatus, isAdmin, isGuard })
         <p className="text-xs text-muted-foreground">Assigned to: <span className="font-medium text-foreground">{ticket.assigned_to}</span></p>
       )}
 
-      {isGuard && assigning && (
+      {(isAdmin || isGuard) && assigning && (
         <div className="flex gap-2">
           <Input
             className="h-7 text-xs"
