@@ -1679,6 +1679,7 @@ async function authorizeCreate(req, res, entity, input) {
       booking_date,
       start_time,
       end_time,
+      
       notes: typeof body.notes === 'string' ? body.notes : '',
       flat_number: isStaffBooking && body.flat_number ? body.flat_number : (user.flat_number || ''),
       resident_email: isStaffBooking && body.resident_email ? normEmail(body.resident_email) : user.email,

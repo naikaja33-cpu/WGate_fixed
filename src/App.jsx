@@ -22,6 +22,8 @@ import Signup from '@/pages/Signup';
 import Amenities from '@/pages/Amenities';
 import PreApprovals from '@/pages/PreApprovals';
 import GatePasses from '@/pages/GatePasses';
+import Home from '@/pages/Home';
+import { Capacitor } from '@capacitor/core';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -35,13 +37,17 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Not signed in yet: show the local login screen for every route.
+    // Not signed in yet. The native Android app skips the marketing Home
+  // page entirely and goes straight to Login — Home is web-only.
   if (!isAuthenticated || !user) {
+    const isNative = Capacitor.isNativePlatform();
     return (
       <Routes>
+        {!isNative && <Route path="/" element={<Home />} />}
+        <Route path="/login" element={<Login />} />
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="*" element={<Login />} />
+        <Route path="*" element={isNative ? <Login /> : <Navigate to="/" replace />} />
       </Routes>
     );
   }
