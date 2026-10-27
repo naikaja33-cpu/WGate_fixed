@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Shield } from 'lucide-react';
+import { Shield,Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,6 +10,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
+
 
 const REASONS = ['New Society', 'Switching from another provider', 'Just exploring'];
 
@@ -35,6 +36,11 @@ export default function Home() {
           <span className="font-bold text-lg text-foreground">WGate</span>
         </div>
         <div className="flex items-center gap-3">
+           <a href={`${import.meta.env.BASE_URL}wgate.apk`} download>
+            <Button variant="secondary">
+            <Download className="w-4 h-4 mr-2" /> Download App
+            </Button>
+            </a> 
           <Link to="/login">
             <Button variant="outline" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 Society Login</Button>
@@ -74,7 +80,9 @@ export default function Home() {
             <Button type="submit" className="w-full">Trail Enroll your society →</Button>
           </form>
           <p className="text-muted-foreground mt-4 text-lg">
-        
+            <p className="text-xs text-muted-foreground mt-2">
+                Not on the Play Store yet — your phone will ask to allow installs from this source the first time.
+            </p>
             {/* **NO UNNECESSARY ADVERTISEMENTS** — just a clean, simple, and fast interface for your society's gate management. */}
           </p>
         </div>
