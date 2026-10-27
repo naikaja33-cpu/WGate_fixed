@@ -68,6 +68,10 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/Dashboard" replace />} />
+      {/* Already logged in — bounce these public-only pages to the dashboard
+          instead of 404ing if the person lands here from a bookmark/old link. */}
+      <Route path="/login" element={<Navigate to="/Dashboard" replace />} />
+      <Route path="/signup" element={<Navigate to="/Dashboard" replace />} />
       <Route element={<AppLayout />}>
         <Route path="/Dashboard" element={<Dashboard />} />
         <Route path="/Visitors" element={<Visitors />} />
