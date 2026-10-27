@@ -39,7 +39,7 @@ export default function Home() {
             <Button variant="outline">Society Login</Button>
           </Link>
           <Link to="/signup">
-            <Button>Enroll your society</Button>
+            <Button>Trail Enroll-Society</Button>
           </Link>
         </div>
       </header>
@@ -47,10 +47,11 @@ export default function Home() {
       <main className="max-w-6xl mx-auto px-6 py-16 grid md:grid-cols-2 gap-12 items-center">
         <div>
           <h1 className="text-4xl md:text-5xl font-bold text-foreground leading-tight">
-            Visitor, Society and Gate Management — Simplified
+            Simplified Gate Management — For Society
           </h1>
           <p className="text-muted-foreground mt-4 text-lg">
-            A modern way to manage visitors, service tickets, amenities and billing for your residential society.
+        
+            **NO UNNECESSART CLUMSY ADVERTISEMENTS** — just a clean, simple, and fast interface for your society's gate management.
           </p>
 
           <form onSubmit={handleEnroll} className="mt-8 bg-card border border-border rounded-2xl p-5 space-y-3 max-w-md">
