@@ -13,52 +13,73 @@ import { useAuth } from '@/lib/AuthContext';
 // login gets hard-locked.
 const GRACE_DAYS = 7;
 
+// function PlanBadge({ society }) {
+//   if (!society.plan) return null;
+//   // The countdown applies to any plan with a trial window set, not only a
+//   // plan literally named "trial" — every signup gets a 14-day trial no
+//   // matter which plan they ultimately land on. Paid plans (no trial clock
+//   // enforced server-side) just show the plan name.
+//   let trialInfo = null;
+//   if (society.plan === 'trial' && society.trial_ends_at) {
+//     const trialEndsAt = new Date(society.trial_ends_at);
+//     const graceEndsAt = new Date(trialEndsAt.getTime() + GRACE_DAYS * 24 * 60 * 60 * 1000);
+//     const now = new Date();
+//     if (now <= trialEndsAt) {
+//       const daysLeft = Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24));
+//       trialInfo = daysLeft <= 3
+//         ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
+//         : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
+//     } else if (now <= graceEndsAt) {
+//       const graceDaysLeft = Math.ceil((graceEndsAt - now) / (1000 * 60 * 60 * 24));
+//       trialInfo = { label: `Grace period: ${graceDaysLeft}d left`, className: 'bg-amber-100 text-amber-800' };
+//     } else {
+//       trialInfo = { label: 'Locked — trial & grace ended', className: 'bg-destructive/10 text-destructive' };
+//     }
+//   }
+//   return (
+//     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+//       <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
+//         {society.plan}
+//       </span>
+//       {trialInfo && (
+//         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
+//           {trialInfo.label}
+//         </span>
+//       )}
+//       {society.approved === false && (
+//         <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">
+//           Pending approval
+//         </span>
+//       )}
+//       {society.suspended && (
+//         <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-destructive/10 text-destructive">
+//           Suspended
+//         </span>
+//       )}
+//     </div>
+//   );
+// }
 function PlanBadge({ society }) {
   if (!society.plan) return null;
-  // The countdown applies to any plan with a trial window set, not only a
-  // plan literally named "trial" — every signup gets a 14-day trial no
-  // matter which plan they ultimately land on. Paid plans (no trial clock
-  // enforced server-side) just show the plan name.
+  // Every plan (Trial, Starter, Pro) now carries its own expiry in
+  // trial_ends_at — whichever one was picked in the Change Plan dialog.
   let trialInfo = null;
-  if (society.plan === 'trial' && society.trial_ends_at) {
+  if (society.trial_ends_at) {
     const trialEndsAt = new Date(society.trial_ends_at);
     const graceEndsAt = new Date(trialEndsAt.getTime() + GRACE_DAYS * 24 * 60 * 60 * 1000);
     const now = new Date();
     if (now <= trialEndsAt) {
       const daysLeft = Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24));
       trialInfo = daysLeft <= 3
-        ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
-        : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
+        ? { label: `Expires in ${daysLeft}d`, className: 'bg-amber-100 text-amber-800' }
+        : { label: `Expires in ${daysLeft}d`, className: 'bg-muted text-muted-foreground' };
     } else if (now <= graceEndsAt) {
       const graceDaysLeft = Math.ceil((graceEndsAt - now) / (1000 * 60 * 60 * 24));
       trialInfo = { label: `Grace period: ${graceDaysLeft}d left`, className: 'bg-amber-100 text-amber-800' };
     } else {
-      trialInfo = { label: 'Locked — trial & grace ended', className: 'bg-destructive/10 text-destructive' };
+      trialInfo = { label: 'Locked — plan expired', className: 'bg-destructive/10 text-destructive' };
     }
   }
-  return (
-    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-      <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
-        {society.plan}
-      </span>
-      {trialInfo && (
-        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
-          {trialInfo.label}
-        </span>
-      )}
-      {society.approved === false && (
-        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">
-          Pending approval
-        </span>
-      )}
-      {society.suspended && (
-        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-destructive/10 text-destructive">
-          Suspended
-        </span>
-      )}
-    </div>
-  );
-}
 export default function SuperAdminDashboard() {
   const { logout } = useAuth();
   const [societies, setSocieties] = useState([]);
@@ -71,6 +92,7 @@ export default function SuperAdminDashboard() {
   const [showAddAdmin, setShowAddAdmin] = useState(null); // society id, or null
   const [credentialsModal, setCredentialsModal] = useState(null); // { title, email, password }
   const [menuSociety, setMenuSociety] = useState(null); // society whose menu access is being edited
+    const [planSociety, setPlanSociety] = useState(null); // society whose plan is being changed
   const loadSocieties = async () => {
     setIsLoading(true);
     setLoadError('');
@@ -126,50 +148,50 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const handleExtendTrial = async (society) => {
-    setActionError('');
-    const input = window.prompt(`Extend ${society.name}'s trial by how many days?`, '14');
-    if (input === null) return;
-    const days = Number(input);
-    if (!Number.isFinite(days) || days <= 0) {
-      setActionError('Enter a positive number of days');
-      return;
-    }
-    try {
-      await wgate.superadmin.extendTrial(society.id, days);
-      loadSocieties();
-    } catch (err) {
-      setActionError(err?.message || 'Failed to extend trial');
-    }
-  };
+  // const handleExtendTrial = async (society) => {
+  //   setActionError('');
+  //   const input = window.prompt(`Extend ${society.name}'s trial by how many days?`, '14');
+  //   if (input === null) return;
+  //   const days = Number(input);
+  //   if (!Number.isFinite(days) || days <= 0) {
+  //     setActionError('Enter a positive number of days');
+  //     return;
+  //   }
+  //   try {
+  //     await wgate.superadmin.extendTrial(society.id, days);
+  //     loadSocieties();
+  //   } catch (err) {
+  //     setActionError(err?.message || 'Failed to extend trial');
+  //   }
+  // };
 
-  const handleUpgradeSociety = async (society) => {
-    setActionError('');
-    const input = window.prompt(`Upgrade ${society.name} to which plan? Type "starter" or "pro".`, 'pro');
-    if (input === null) return;
-    const plan = input.trim().toLowerCase();
-    if (!['starter', 'pro'].includes(plan)) {
-      setActionError('Plan must be "starter" or "pro"');
-      return;
-    }
-    try {
-      await wgate.superadmin.upgradeSociety(society.id, plan);
-      loadSocieties();
-    } catch (err) {
-      setActionError(err?.message || 'Failed to upgrade society');
-    }
-  };
+  // const handleUpgradeSociety = async (society) => {
+  //   setActionError('');
+  //   const input = window.prompt(`Upgrade ${society.name} to which plan? Type "starter" or "pro".`, 'pro');
+  //   if (input === null) return;
+  //   const plan = input.trim().toLowerCase();
+  //   if (!['starter', 'pro'].includes(plan)) {
+  //     setActionError('Plan must be "starter" or "pro"');
+  //     return;
+  //   }
+  //   try {
+  //     await wgate.superadmin.upgradeSociety(society.id, plan);
+  //     loadSocieties();
+  //   } catch (err) {
+  //     setActionError(err?.message || 'Failed to upgrade society');
+  //   }
+  // };
 
-  const handleSuspendSociety = async (society) => {
+   const handleSuspendSociety = async (society) => {
     setActionError('');
-    const reason = window.prompt(`Suspend ${society.name}? Optionally give a reason (shown to the admin):`, '');
-    if (reason === null) return;
-    try {
+     const reason = window.prompt(`Suspend ${society.name}? Optionally give a reason (shown to the admin):`, '');
+     if (reason === null) return;
+     try {
       await wgate.superadmin.suspendSociety(society.id, reason.trim());
       loadSocieties();
     } catch (err) {
       setActionError(err?.message || 'Failed to suspend society');
-    }
+     }
   };
 
   const handleUnsuspendSociety = async (society) => {
@@ -287,15 +309,10 @@ export default function SuperAdminDashboard() {
                     Approve Society
                   </Button>
                 )}
-                {society.approved && society.plan === 'trial' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleExtendTrial(society)}>
-                      Extend Trial
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleUpgradeSociety(society)}>
-                      Upgrade Plan
-                    </Button>
-                  </div>
+                {society.approved && (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setPlanSociety(society)}>
+                    Change Plan
+                  </Button>
                 )}
                 {society.approved && (
                   society.suspended ? (
@@ -367,6 +384,16 @@ export default function SuperAdminDashboard() {
           onClose={() => setMenuSociety(null)}
           onSaved={() => {
             setMenuSociety(null);
+            loadSocieties();
+          }}
+        />
+      )}
+            {planSociety && (
+        <PlanModal
+          society={planSociety}
+          onClose={() => setPlanSociety(null)}
+          onSaved={() => {
+            setPlanSociety(null);
             loadSocieties();
           }}
         />
@@ -551,7 +578,74 @@ const ALL_MENUS = [
   { key: 'PreApprovals', label: 'Pre-Approvals' },
   { key: 'GatePasses', label: 'Gate Pass' },
 ];
+// Keep in sync with PLAN_OPTIONS in server/wgate-server.mjs.
+const PLAN_OPTIONS = [
+  { key: 'trial', label: 'Trial — 15 Days' },
+  { key: 'starter', label: 'Starter — 3 Months' },
+  { key: 'pro', label: 'Pro — 1 Year' },
+];
 
+function PlanModal({ society, onClose, onSaved }) {
+  const [selected, setSelected] = useState(
+    PLAN_OPTIONS.some((p) => p.key === society.plan) ? society.plan : 'trial'
+  );
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setError('');
+    setIsSaving(true);
+    try {
+      await wgate.superadmin.setSocietyPlan(society.id, selected);
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Something went wrong');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-card w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Change Plan</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Pick a package for {society.name}. This sets a fresh access window starting now — use it any time to correct a mistaken selection.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {PLAN_OPTIONS.map(({ key, label }) => (
+            <label
+              key={key}
+              className="flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer hover:bg-accent"
+            >
+              <input
+                type="radio"
+                name="plan"
+                value={key}
+                checked={selected === key}
+                onChange={() => setSelected(key)}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-sm font-medium">{label}</span>
+            </label>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button type="button" className="flex-1" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function MenuAccessModal({ society, onClose, onSaved }) {
   const [enabled, setEnabled] = useState(society.enabled_menus ?? ALL_MENUS.map((m) => m.key));
   const [error, setError] = useState('');

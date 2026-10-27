@@ -365,7 +365,7 @@ function rowToSociety(row) {
 // (not on a time-limited trial at all, e.g. a paid plan or no trial set).
 // Suspension is reported separately since it can hit a society on any plan.
 function trialStatusFor(society) {
-  if (society.plan !== 'trial' || !society.trial_ends_at) return { status: 'active' };
+  if (!society.trial_ends_at) return { status: 'active' };
   const now = Date.now();
   const trialEndsAt = new Date(society.trial_ends_at).getTime();
   const graceEndsAt = trialEndsAt + GRACE_DAYS * 24 * 60 * 60 * 1000;
@@ -1311,10 +1311,41 @@ app.post('/api/superadmin/societies/:id/upgrade', requireAuth, requireSuperadmin
   const society = await getSocietyById(req.params.id);
   if (!society) return res.status(404).json({ message: 'Society not found' });
   const plan = ['starter', 'pro'].includes(req.body?.plan) ? req.body.plan : 'pro';
-  await pool.query(`UPDATE societies SET plan = $1, updated_date = now() WHERE id = $2`, [plan, req.params.id]);
+  //await pool.query(`UPDATE societies SET plan = $1, updated_date = now() WHERE id = $2`, [plan, req.params.id]);
+  await pool.query(`UPDATE societies SET plan = $1, trial_ends_at = NULL, updated_date = now() WHERE id = $2`, [plan, req.params.id]);
   res.json(await getSocietyById(req.params.id));
 }));
+// Superadmin picks one of three fixed packages — each sets both the plan
+// label and a hard expiry, so Starter/Pro actually lock out at the end of
+// their term just like Trial does today (not permanent forever).
+const PLAN_OPTIONS = {
+  trial: { label: 'Trial — 15 Days', days: 15 },
+  starter: { label: 'Starter — 3 Months', days: 90 },
+  pro: { label: 'Pro — 1 Year', days: 365 },
+};
 
+app.get('/api/superadmin/plan-options', requireAuth, requireSuperadmin, (_req, res) => {
+  res.json(PLAN_OPTIONS);
+});
+
+app.post('/api/superadmin/societies/:id/set-plan', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  const key = req.body?.plan;
+  const option = PLAN_OPTIONS[key];
+  if (!option) {
+    return res.status(400).json({ message: `Plan must be one of: ${Object.keys(PLAN_OPTIONS).join(', ')}` });
+  }
+  // Always sets a FRESH expiry from now — doesn't extend an old one. That
+  // way if the super admin picked the wrong package by mistake, picking
+  // the right one afterwards fully corrects it rather than stacking dates.
+  const trialEndsAt = new Date(Date.now() + option.days * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query(
+    `UPDATE societies SET plan = $1, trial_ends_at = $2, updated_date = now() WHERE id = $3`,
+    [key, trialEndsAt, req.params.id]
+  );
+  res.json(await getSocietyById(req.params.id));
+}));
 /* Manual hard lock, independent of the trial clock — suspend blocks login
    and cuts off every signed-in session for that society immediately.
    Unsuspend only undoes the suspension; it does not touch approval, plan

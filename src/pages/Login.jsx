@@ -90,13 +90,14 @@ export default function Login() {
       setForgotSubmitting(false);
     }
   };
-
+            
   if (step === 'society') {
     return (
       <AuthLayout
         icon={Shield}
         title="WGATE"
         subtitle="Select your society to sign in"
+        
       >
         <div className="space-y-3">
           {societiesLoading && (
@@ -132,6 +133,12 @@ export default function Login() {
             New society?{' '}
             <Link to="/signup" className="text-primary font-medium hover:underline">
               Sign up
+            </Link>
+          </p>
+          <p className="text-center text-sm text-muted-foreground pt-2">
+            
+            <Link to="/home" className="text-primary font-medium hover:underline">
+              Back to Home
             </Link>
           </p>
         </div>

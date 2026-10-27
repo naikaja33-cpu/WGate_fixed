@@ -181,6 +181,12 @@ const superadmin = {
   async resetAdminPassword(id, societyId) {
     return request(`/superadmin/admins/${id}/reset-password`, { method: 'POST', body: { society_id: societyId } });
   },
+    async getPlanOptions() {
+    return request('/superadmin/plan-options');
+  },
+  async setSocietyPlan(id, plan) {
+    return request(`/superadmin/societies/${id}/set-plan`, { method: 'POST', body: { plan } });
+  },
 };
 const admin = {
   async getWhatsappNumber() {

@@ -36,11 +36,12 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <Link to="/login">
-            <Button variant="outline">Society Login</Button>
+            <Button variant="outline" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                Society Login</Button>
           </Link>
-          <Link to="/signup">
+          {/* <Link to="/signup">
             <Button>Trail Enroll-Society</Button>
-          </Link>
+          </Link> */}
         </div>
       </header>
 
@@ -49,10 +50,7 @@ export default function Home() {
           <h1 className="text-4xl md:text-5xl font-bold text-foreground leading-tight">
             Simplified Gate Management — For Society
           </h1>
-          <p className="text-muted-foreground mt-4 text-lg">
-        
-            **NO UNNECESSART CLUMSY ADVERTISEMENTS** — just a clean, simple, and fast interface for your society's gate management.
-          </p>
+          
 
           <form onSubmit={handleEnroll} className="mt-8 bg-card border border-border rounded-2xl p-5 space-y-3 max-w-md">
             <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -73,8 +71,12 @@ export default function Home() {
                 ))}
               </SelectContent>
             </Select>
-            <Button type="submit" className="w-full">Enroll your society →</Button>
+            <Button type="submit" className="w-full">Trail Enroll your society →</Button>
           </form>
+          <p className="text-muted-foreground mt-4 text-lg">
+        
+            {/* **NO UNNECESSARY ADVERTISEMENTS** — just a clean, simple, and fast interface for your society's gate management. */}
+          </p>
         </div>
 
         <div className="hidden md:flex items-center justify-center">
