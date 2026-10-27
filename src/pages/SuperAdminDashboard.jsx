@@ -13,52 +13,6 @@ import { useAuth } from '@/lib/AuthContext';
 // login gets hard-locked.
 const GRACE_DAYS = 7;
 
-// function PlanBadge({ society }) {
-//   if (!society.plan) return null;
-//   // The countdown applies to any plan with a trial window set, not only a
-//   // plan literally named "trial" — every signup gets a 14-day trial no
-//   // matter which plan they ultimately land on. Paid plans (no trial clock
-//   // enforced server-side) just show the plan name.
-//   let trialInfo = null;
-//   if (society.plan === 'trial' && society.trial_ends_at) {
-//     const trialEndsAt = new Date(society.trial_ends_at);
-//     const graceEndsAt = new Date(trialEndsAt.getTime() + GRACE_DAYS * 24 * 60 * 60 * 1000);
-//     const now = new Date();
-//     if (now <= trialEndsAt) {
-//       const daysLeft = Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24));
-//       trialInfo = daysLeft <= 3
-//         ? { label: `Trial: ${daysLeft}d left`, className: 'bg-amber-100 text-amber-800' }
-//         : { label: `Trial: ${daysLeft}d left`, className: 'bg-muted text-muted-foreground' };
-//     } else if (now <= graceEndsAt) {
-//       const graceDaysLeft = Math.ceil((graceEndsAt - now) / (1000 * 60 * 60 * 24));
-//       trialInfo = { label: `Grace period: ${graceDaysLeft}d left`, className: 'bg-amber-100 text-amber-800' };
-//     } else {
-//       trialInfo = { label: 'Locked — trial & grace ended', className: 'bg-destructive/10 text-destructive' };
-//     }
-//   }
-//   return (
-//     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-//       <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
-//         {society.plan}
-//       </span>
-//       {trialInfo && (
-//         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
-//           {trialInfo.label}
-//         </span>
-//       )}
-//       {society.approved === false && (
-//         <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">
-//           Pending approval
-//         </span>
-//       )}
-//       {society.suspended && (
-//         <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-destructive/10 text-destructive">
-//           Suspended
-//         </span>
-//       )}
-//     </div>
-//   );
-// }
 function PlanBadge({ society }) {
   if (!society.plan) return null;
   // Every plan (Trial, Starter, Pro) now carries its own expiry in
@@ -80,6 +34,31 @@ function PlanBadge({ society }) {
       trialInfo = { label: 'Locked — plan expired', className: 'bg-destructive/10 text-destructive' };
     }
   }
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+      <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
+        {society.plan}
+      </span>
+      {trialInfo && (
+        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${trialInfo.className}`}>
+          {trialInfo.label}
+        </span>
+      )}
+      {society.approved === false && (
+        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800">
+          Pending approval
+        </span>
+      )}
+      {society.suspended && (
+        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-destructive/10 text-destructive">
+          Suspended
+        </span>
+      )}
+    </div>
+  );
+}
+
+
 export default function SuperAdminDashboard() {
   const { logout } = useAuth();
   const [societies, setSocieties] = useState([]);
