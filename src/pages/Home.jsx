@@ -95,7 +95,7 @@ export default function Home() {
           <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground cursor-not-allowed">
             <Apple className="w-4 h-4" /> iPhone <span className="text-xs">(coming soon)</span>
           </span>
-          <a href="https://github.com/naikaja33-cpu/WGate_fixed/releases/download/v1.7/app-release.apk" download>
+          <a href={`${import.meta.env.BASE_URL}wgate.apk`} download>
             <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-accent transition-colors cursor-pointer">
               <Smartphone className="w-4 h-4" /> Android
             </span>
