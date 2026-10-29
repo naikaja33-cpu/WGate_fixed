@@ -464,6 +464,7 @@ async function updateSocietyRecord(id, patch) {
 async function deleteSocietyRecord(id) {
   const schemaName = await getSocietySchemaName(id);
   if (!schemaName) return false;
+  await pool.query('DELETE FROM sessions WHERE society_id = $1', [id]);
   await pool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
   await pool.query('DELETE FROM societies WHERE id = $1', [id]);
   return true;

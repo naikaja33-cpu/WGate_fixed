@@ -63,7 +63,7 @@ export default function Home() {
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 15))}
               required
             />
-            <Select value={reason} onValueChange={setReason}>
+            <Select value={reason} onValueChange={setReason} required>
               <SelectTrigger>
                 <SelectValue placeholder="Select Reason" />
               </SelectTrigger>

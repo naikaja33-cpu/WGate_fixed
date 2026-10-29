@@ -269,6 +269,7 @@ export default function SuperAdminDashboard() {
                         <div className="min-w-0">
                           <span className="font-medium">{a.full_name}</span>
                           <span className="text-muted-foreground"> — {a.email}</span>
+                          {a.phone && <div className="text-xs text-muted-foreground">📞 {a.phone}</div>}
                         </div>
                         <button
                           type="button"
