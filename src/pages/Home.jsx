@@ -38,7 +38,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
            
           <Link to="/login">
-            <Button variant="outline" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button variant="outline" className="bg-emerald-600  text-white">
                 Society Login</Button>
           </Link>
           {/* <Link to="/signup">
@@ -104,7 +104,7 @@ export default function Home() {
         </div>
         <p className="text-xs text-muted-foreground mt-2">
             
-                Not on the Play Store yet — your phone will ask to allow installs from this source the first time.
+                **Not on the Play Store yet — your phone will ask to allow installs from this source the first time.
         </p>
       </section>
     </div>
