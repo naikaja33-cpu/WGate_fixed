@@ -190,6 +190,9 @@ const superadmin = {
     async runCleanup() {
     return request('/superadmin/cleanup', { method: 'POST' });
   },
+    async clearSocietyData(id, entities) {
+    return request(`/superadmin/societies/${id}/clear-data`, { method: 'POST', body: { entities } });
+  },
 };
 const admin = {
   async getWhatsappNumber() {

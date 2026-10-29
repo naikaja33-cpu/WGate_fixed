@@ -66,7 +66,7 @@ export default function SuperAdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-
+  const [clearDataSociety, setClearDataSociety] = useState(null); // society whose data is being cleared
   const [showAddSociety, setShowAddSociety] = useState(false);
   const [editingSociety, setEditingSociety] = useState(null); // society object, or null
   const [showAddAdmin, setShowAddAdmin] = useState(null); // society id, or null
@@ -340,6 +340,15 @@ export default function SuperAdminDashboard() {
                     Menu Access
                   </Button>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-destructive hover:text-destructive"
+                  onClick={() => setClearDataSociety(society)}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  Clear Data
+                </Button>
               </CardContent>
             </Card>
           ))}
@@ -396,6 +405,12 @@ export default function SuperAdminDashboard() {
             setPlanSociety(null);
             loadSocieties();
           }}
+        />
+      )}
+            {clearDataSociety && (
+        <ClearDataModal
+          society={clearDataSociety}
+          onClose={() => setClearDataSociety(null)}
         />
       )}
       {credentialsModal && (
@@ -642,6 +657,104 @@ function PlanModal({ society, onClose, onSaved }) {
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+const CLEARABLE_ENTITIES = [
+  { key: 'Visitor', label: 'Visitors' },
+  { key: 'ServiceTicket', label: 'Service Tickets' },
+  { key: 'AmenityBooking', label: 'Amenity Bookings' },
+  { key: 'PreApproval', label: 'Pre-Approvals' },
+  { key: 'GatePass', label: 'Gate Passes' },
+];
+
+function ClearDataModal({ society, onClose }) {
+  const [selected, setSelected] = useState([]);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null); // { deleted }
+  const [isClearing, setIsClearing] = useState(false);
+
+  const toggle = (key) =>
+    setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const handleClear = async () => {
+    setError('');
+    if (selected.length === 0) {
+      setError('Pick at least one data type to clear');
+      return;
+    }
+    const names = selected.map((k) => CLEARABLE_ENTITIES.find((e) => e.key === k)?.label).join(', ');
+    if (!window.confirm(`Permanently delete ALL ${names} for "${society.name}"? This cannot be undone.`)) return;
+    setIsClearing(true);
+    try {
+      const res = await wgate.superadmin.clearSocietyData(society.id, selected);
+      setResult(res);
+    } catch (err) {
+      setError(err?.message || 'Failed to clear data');
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-card w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Clear Data</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Permanently delete ALL records of the selected type(s) for {society.name} — not just old/closed ones. Members, notices, and billing are never affected here.
+          </p>
+        </div>
+
+        {result ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-emerald-700">Done — deleted:</p>
+            <ul className="text-sm space-y-1">
+              {Object.entries(result.deleted).map(([entity, count]) => (
+                <li key={entity} className="flex justify-between">
+                  <span>{CLEARABLE_ENTITIES.find((e) => e.key === entity)?.label || entity}</span>
+                  <span className="font-medium">{count}</span>
+                </li>
+              ))}
+            </ul>
+            <Button type="button" className="w-full" onClick={onClose}>Done</Button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {CLEARABLE_ENTITIES.map(({ key, label }) => (
+                <label
+                  key={key}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer hover:bg-accent"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(key)}
+                    onChange={() => toggle(key)}
+                    className="w-4 h-4 accent-destructive"
+                  />
+                  <span className="text-sm font-medium">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            {error && <p className="text-xs text-destructive">{error}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="flex-1"
+                onClick={handleClear}
+                disabled={isClearing}
+              >
+                {isClearing ? 'Clearing…' : 'Clear Selected'}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

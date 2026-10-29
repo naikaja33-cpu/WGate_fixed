@@ -2319,6 +2319,29 @@ async function main() {
   await cleanupOldRecords();
   res.json({ success: true, message: 'Cleanup pass complete' });
 }));
+const CLEARABLE_ENTITIES = ['GatePass', 'PreApproval', 'AmenityBooking', 'Visitor', 'ServiceTicket'];
+
+app.post('/api/superadmin/societies/:id/clear-data', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+
+  const entities = Array.isArray(req.body?.entities) ? req.body.entities : [];
+  const invalid = entities.filter((e) => !CLEARABLE_ENTITIES.includes(e));
+  if (entities.length === 0 || invalid.length > 0) {
+    return res.status(400).json({ message: `entities must be a non-empty list from: ${CLEARABLE_ENTITIES.join(', ')}` });
+  }
+
+  const schemaName = await getSocietySchemaName(society.id);
+  const deleted = {};
+  for (const entity of entities) {
+    const { rowCount } = await pool.query(
+      `DELETE FROM "${schemaName}".entity_records WHERE entity = $1`,
+      [entity]
+    );
+    deleted[entity] = rowCount;
+  }
+  res.json({ success: true, deleted });
+}));
   const server = app.listen(PORT, HOST, () => {
     console.log(`[wgate-api] Backend running at http://${HOST}:${PORT} (Postgres, schema-per-society)`);
   });
