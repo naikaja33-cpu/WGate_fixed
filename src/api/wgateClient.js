@@ -187,6 +187,9 @@ const superadmin = {
   async setSocietyPlan(id, plan) {
     return request(`/superadmin/societies/${id}/set-plan`, { method: 'POST', body: { plan } });
   },
+    async runCleanup() {
+    return request('/superadmin/cleanup', { method: 'POST' });
+  },
 };
 const admin = {
   async getWhatsappNumber() {

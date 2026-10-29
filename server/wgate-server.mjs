@@ -688,7 +688,70 @@ async function createSession(userId, societyId) {
   );
   return token;
 }
+// Retention windows (days) — how long to keep a record after it's no
+// longer "active" before it gets purged to save space. Tune via env vars
+// without a code change; set any to 0 to disable cleanup for that entity.
+// MaintenanceBill is intentionally never auto-deleted — financial records.
+const RETENTION_DAYS = {
+  GatePass: Number(process.env.RETENTION_GATEPASS_DAYS || 90),
+  PreApproval: Number(process.env.RETENTION_PREAPPROVAL_DAYS || 90),
+  AmenityBooking: Number(process.env.RETENTION_AMENITY_DAYS || 180),
+  Visitor: Number(process.env.RETENTION_VISITOR_DAYS || 365),
+  ServiceTicket: Number(process.env.RETENTION_TICKET_DAYS || 365),
+};
 
+async function cleanupOldRecords() {
+  const { rows: schemas } = await pool.query(`SELECT schema_name FROM societies`);
+  const cutoff = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  for (const { schema_name } of schemas) {
+    try {
+      if (RETENTION_DAYS.GatePass > 0) {
+        await pool.query(
+          `DELETE FROM "${schema_name}".entity_records
+           WHERE entity = 'GatePass' AND data->>'status' IN ('used','cancelled')
+             AND updated_date < $1`,
+          [cutoff(RETENTION_DAYS.GatePass)]
+        );
+      }
+      if (RETENTION_DAYS.PreApproval > 0) {
+        await pool.query(
+          `DELETE FROM "${schema_name}".entity_records
+           WHERE entity = 'PreApproval' AND data->>'status' = 'cancelled'
+             AND updated_date < $1`,
+          [cutoff(RETENTION_DAYS.PreApproval)]
+        );
+      }
+      if (RETENTION_DAYS.AmenityBooking > 0) {
+        await pool.query(
+          `DELETE FROM "${schema_name}".entity_records
+           WHERE entity = 'AmenityBooking' AND data->>'status' IN ('rejected','cancelled')
+             AND updated_date < $1`,
+          [cutoff(RETENTION_DAYS.AmenityBooking)]
+        );
+      }
+      if (RETENTION_DAYS.Visitor > 0) {
+        await pool.query(
+          `DELETE FROM "${schema_name}".entity_records
+           WHERE entity = 'Visitor' AND data->>'check_out_time' IS NOT NULL
+             AND updated_date < $1`,
+          [cutoff(RETENTION_DAYS.Visitor)]
+        );
+      }
+      if (RETENTION_DAYS.ServiceTicket > 0) {
+        await pool.query(
+          `DELETE FROM "${schema_name}".entity_records
+           WHERE entity = 'ServiceTicket' AND data->>'status' IN ('resolved','closed')
+             AND updated_date < $1`,
+          [cutoff(RETENTION_DAYS.ServiceTicket)]
+        );
+      }
+    } catch (err) {
+      console.error(`[cleanup] Failed for schema ${schema_name}:`, err.message);
+    }
+  }
+  console.log('[cleanup] Retention cleanup pass complete.');
+}
 async function pruneSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= now()');
 }
@@ -2249,7 +2312,13 @@ async function main() {
   await initSchema();
   await seedIfEmpty();
   await pruneSessions();
-
+  await cleanupOldRecords();
+  // Re-run once a day for as long as the process stays up.
+  setInterval(cleanupOldRecords, 24 * 60 * 60 * 1000);
+  app.post('/api/superadmin/cleanup', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  await cleanupOldRecords();
+  res.json({ success: true, message: 'Cleanup pass complete' });
+}));
   const server = app.listen(PORT, HOST, () => {
     console.log(`[wgate-api] Backend running at http://${HOST}:${PORT} (Postgres, schema-per-society)`);
   });

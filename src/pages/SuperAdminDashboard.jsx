@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
+import { toast } from 'sonner';
 
 // Mirrors the backend's GRACE_DAYS (server/wgate-server.mjs) — how many
 // extra days a society keeps working after its trial date passes before
@@ -182,7 +183,21 @@ export default function SuperAdminDashboard() {
       setActionError(err?.message || 'Failed to unsuspend society');
     }
   };
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
 
+  const handleRunCleanup = async () => {
+    if (!window.confirm('Run database cleanup now? This permanently deletes old closed/expired records past their retention window (see server config). This cannot be undone.')) return;
+    setActionError('');
+    setIsCleaningUp(true);
+    try {
+      await wgate.superadmin.runCleanup();
+      toast.success('Cleanup complete');
+    } catch (err) {
+      setActionError(err?.message || 'Cleanup failed');
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
   const handleResetPassword = async (admin, society) => {
     setActionError('');
     if (!window.confirm(`Reset the password for ${admin.full_name || admin.email}? Their current password will stop working immediately.`)) return;
@@ -202,10 +217,15 @@ export default function SuperAdminDashboard() {
             <ShieldCheck className="w-5 h-5 text-primary" />
             <h1 className="font-semibold">Super Admin</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => logout()}>
-            <LogOut className="w-4 h-4 mr-1.5" />
-            Sign out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleRunCleanup} disabled={isCleaningUp}>
+              {isCleaningUp ? 'Cleaning…' : 'Run Cleanup'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => logout()}>
+              <LogOut className="w-4 h-4 mr-1.5" />
+              Sign out
+            </Button>
+          </div>
         </div>
       </header>
 
