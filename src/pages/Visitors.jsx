@@ -77,29 +77,31 @@ export default function Visitors() {
         </TabsList>
       </Tabs>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-sm">No visitors found</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(v => (
-            <VisitorCard
-              key={v.id}
-              visitor={v}
-              showActions={showActions}
-              role={role}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              onCheckout={handleCheckout}
-            />
-          ))}
-        </div>
-      )}
+            <div className="max-h-[65vh] overflow-y-auto pr-1 -mr-1">
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-sm">No visitors found</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map(v => (
+              <VisitorCard
+                key={v.id}
+                visitor={v}
+                showActions={showActions}
+                role={role}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onCheckout={handleCheckout}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {showForm && (
         <AddVisitorForm

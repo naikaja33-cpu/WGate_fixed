@@ -72,7 +72,7 @@ export default function NoticeBoard() {
           <TabsTrigger value="maintenance" className="flex-1 text-xs">Maintenance</TabsTrigger>
         </TabsList>
       </Tabs>
-
+<div className="max-h-[65vh] overflow-y-auto pr-1 -mr-1">
       {isLoading ? (
         <div className="flex justify-center py-12">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -99,7 +99,7 @@ export default function NoticeBoard() {
           ))}
         </div>
       )}
-
+</div>
       {showAdd && (
         <AddNoticeModal
           onSubmit={(data) => createMutation.mutate(data)}

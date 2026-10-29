@@ -157,7 +157,7 @@ export default function UserManagementSection() {
         onChange={e => setSearch(e.target.value)}
         className="h-8 text-sm"
       />
-
+<div className="max-h-[65vh] overflow-y-auto pr-1 -mr-1">
       {isLoading ? (
         <div className="flex justify-center py-6">
           <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -179,7 +179,7 @@ export default function UserManagementSection() {
           ))}
         </div>
       )}
-
+</div>
       {showModal && (
         <InviteEditUserModal
           member={editingMember}

@@ -68,27 +68,29 @@ export default function ServiceTickets() {
         </TabsList>
       </Tabs>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-sm">No tickets found</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(t => (
-            <TicketCard
-              key={t.id}
-              ticket={t}
-              isAdmin={isAdmin}
-              isGuard={isGuard}
-              onUpdateStatus={handleUpdateStatus}
-            />
-          ))}
-        </div>
-      )}
+      <div className="max-h-[65vh] overflow-y-auto pr-1 -mr-1">
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-sm">No tickets found</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map(t => (
+              <TicketCard
+                key={t.id}
+                ticket={t}
+                isAdmin={isAdmin}
+                isGuard={isGuard}
+                onUpdateStatus={handleUpdateStatus}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {showForm && (
         <AddTicketForm
