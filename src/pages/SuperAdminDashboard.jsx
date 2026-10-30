@@ -221,10 +221,15 @@ export default function SuperAdminDashboard() {
             <Button variant="outline" size="sm" onClick={handleRunCleanup} disabled={isCleaningUp}>
               {isCleaningUp ? 'Cleaning…' : 'Run Cleanup'}
             </Button>
+            <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleRunCleanup} disabled={isCleaningUp}>
+              {isCleaningUp ? 'Cleaning…' : 'Run Cleanup'}
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => logout()}>
               <LogOut className="w-4 h-4 mr-1.5" />
               Sign out
             </Button>
+          </div>
           </div>
         </div>
       </header>
