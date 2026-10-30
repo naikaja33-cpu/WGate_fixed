@@ -574,9 +574,6 @@ function PlanModal({ society, onClose, onSaved }) {
   const [selected, setSelected] = useState(
     PLAN_OPTIONS.some((p) => p.key === society.plan) ? society.plan : 'trial'
   );
-  
-
-
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -632,8 +629,10 @@ function PlanModal({ society, onClose, onSaved }) {
         </div>
       </div>
     </div>
-  )
-  const CLEARABLE_ENTITIES = [
+  );
+}
+
+const CLEARABLE_ENTITIES = [
   { key: 'Visitor', label: 'Visitors' },
   { key: 'ServiceTicket', label: 'Service Tickets' },
   { key: 'AmenityBooking', label: 'Amenity Bookings' },
@@ -731,6 +730,7 @@ function ClearDataModal({ society, onClose }) {
     </div>
   );
 }
+
 function MenuAccessModal({ society, onClose, onSaved }) {
   const [enabled, setEnabled] = useState(society.enabled_menus ?? ALL_MENUS.map((m) => m.key));
   const [error, setError] = useState('');
@@ -782,5 +782,4 @@ function MenuAccessModal({ society, onClose, onSaved }) {
       </div>
     </div>
   );
-}
 }

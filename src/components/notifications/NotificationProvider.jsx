@@ -26,7 +26,7 @@ export function NotificationProvider({ children }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.role === 'superadmin') return;
     const role = user.role || 'tenant';
     const isResident = role === 'tenant' || role === 'owner';
 
@@ -90,7 +90,7 @@ export function NotificationProvider({ children }) {
   // invalidate React Query's cache so the active screen refetches on its
   // own. No pull-to-refresh or manual reload needed.
   useEffect(() => {
-    if (!user) return;
+    if (!user || user.role === 'superadmin') return;
     let pending = null;
     const scheduleRefresh = () => {
       if (pending) return;
