@@ -41,9 +41,7 @@ export default function Home() {
             <Button variant="outline" className="bg-emerald-600  text-white">
                 Society Login</Button>
           </Link>
-          {/* <Link to="/signup">
-            <Button>Trail Enroll-Society</Button>
-          </Link> */}
+          
         </div>
       </header>
 

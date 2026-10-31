@@ -1,13 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { X } from 'lucide-react';
+import { X, Camera } from 'lucide-react';
 import { wgate } from '@/api/wgateClient';
 
 const OTHER_FLAT = '__other__';
+
+// Shrinks a camera photo to a small JPEG data URL so it stays cheap to store.
+function compressImage(file, maxSide = 400, quality = 0.55) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read the photo'));
+    };
+    img.src = url;
+  });
+}
 
 export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
   const [form, setForm] = useState({
@@ -22,6 +44,10 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
   const [flatMode, setFlatMode] = useState(''); // '' (nothing picked yet), a real flat, or OTHER_FLAT
   const [customFlat, setCustomFlat] = useState('');
   const [flatError, setFlatError] = useState('');
+  const [photo, setPhoto] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,19 +72,36 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
     }
   };
 
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // lets the same photo be retaken
+    if (!file) return;
+    setPhotoError('');
+    setPhotoBusy(true);
+    try {
+      setPhoto(await compressImage(file));
+    } catch (err) {
+      setPhotoError(err?.message || 'Could not process the photo');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.flat_number.trim()) {
       setFlatError('Please select or enter a flat number');
       return;
     }
-    if (form.visitor_phone && form.visitor_phone.length !== 10) {
-      setFlatError(''); // keep the flat-number message area clear if that part was fine
-      return;
-    }
+    // To make the photo compulsory, uncomment the next 4 lines:
+    // if (!photo) {
+    //   setPhotoError('Please take a photo of the visitor');
+    //   return;
+    // }
     setFlatError('');
     onSubmit({
       ...form,
+      ...(photo ? { photo } : {}),
       check_in_time: new Date().toISOString(),
       status: 'pending',
     });
@@ -78,23 +121,44 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
+            <Label>Visitor Photo</Label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhoto}
+              className="hidden"
+            />
+            {photo ? (
+              <div className="flex items-center gap-3">
+                <img src={photo} alt="Visitor" className="w-20 h-20 rounded-xl object-cover border border-border" />
+                <div className="flex flex-col gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={photoBusy}>
+                    <Camera className="w-4 h-4 mr-1.5" /> Retake
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setPhoto('')}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" className="w-full" onClick={() => fileRef.current?.click()} disabled={photoBusy}>
+                <Camera className="w-4 h-4 mr-1.5" />
+                {photoBusy ? 'Processing…' : 'Take Photo'}
+              </Button>
+            )}
+            {photoError && <p className="text-xs text-destructive">{photoError}</p>}
+          </div>
+
+          <div className="space-y-2">
             <Label>Visitor Name *</Label>
             <Input placeholder="Full name" value={form.visitor_name} onChange={e => update('visitor_name', e.target.value)} required />
           </div>
 
-                    <div className="space-y-2">
+          <div className="space-y-2">
             <Label>Phone</Label>
-            <Input
-              type="tel"
-              inputMode="numeric"
-              placeholder="Phone number"
-              value={form.visitor_phone}
-              onChange={e => update('visitor_phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-              maxLength={10}
-            />
-            {form.visitor_phone && form.visitor_phone.length !== 10 && (
-              <p className="text-xs text-destructive">Phone number must be exactly 10 digits</p>
-            )}
+            <Input placeholder="Phone number" value={form.visitor_phone} onChange={e => update('visitor_phone', e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -150,7 +214,7 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
             <Textarea placeholder="Any additional notes..." value={form.notes} onChange={e => update('notes', e.target.value)} rows={2} />
           </div>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button type="submit" className="w-full" disabled={isSubmitting || photoBusy}>
             {isSubmitting ? 'Adding...' : 'Check In Visitor'}
           </Button>
         </form>

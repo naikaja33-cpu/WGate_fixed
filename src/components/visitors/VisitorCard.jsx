@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Clock, Phone, Car, Check, X, LogOut as LogOutIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,12 +19,25 @@ const purposeLabels = {
 };
 
 export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, showActions, role }) {
+  const [showPhoto, setShowPhoto] = useState(false);
+
   return (
     <div className="bg-card rounded-2xl border border-border p-4 space-y-3 transition-all hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <h3 className="font-semibold text-foreground">{visitor.visitor_name}</h3>
-          <p className="text-sm text-muted-foreground">Flat {visitor.flat_number}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          {visitor.photo && (
+            <button type="button" onClick={() => setShowPhoto(true)} className="shrink-0">
+              <img
+                src={visitor.photo}
+                alt={visitor.visitor_name}
+                className="w-12 h-12 rounded-xl object-cover border border-border"
+              />
+            </button>
+          )}
+          <div className="space-y-1 min-w-0">
+            <h3 className="font-semibold text-foreground truncate">{visitor.visitor_name}</h3>
+            <p className="text-sm text-muted-foreground">Flat {visitor.flat_number}</p>
+          </div>
         </div>
         <Badge className={`text-xs border ${statusStyles[visitor.status]} capitalize`}>
           {visitor.status}
@@ -46,7 +60,7 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
         )}
         {visitor.check_in_time && (
           <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
-            <Clock className="w-3 h-3" /> {format(new Date(visitor.check_in_time), 'h:mm a')}
+            <Clock className="w-3 h-3" /> {format(new Date(visitor.check_in_time), 'd MMM, h:mm a')}
           </span>
         )}
       </div>
@@ -66,6 +80,15 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
         <Button size="sm" variant="outline" className="w-full" onClick={() => onCheckout(visitor)}>
           <LogOutIcon className="w-4 h-4 mr-1" /> Mark Checkout
         </Button>
+      )}
+
+      {showPhoto && visitor.photo && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setShowPhoto(false)}
+        >
+          <img src={visitor.photo} alt={visitor.visitor_name} className="max-w-full max-h-[80vh] rounded-2xl" />
+        </div>
       )}
     </div>
   );
