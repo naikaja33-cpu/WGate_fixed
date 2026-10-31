@@ -47,6 +47,7 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
   const [photo, setPhoto] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [photoBusy, setPhotoBusy] = useState(false);
+    const [phoneError, setPhoneError] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -99,6 +100,12 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
     //   return;
     // }
     setFlatError('');
+    const phoneDigits = form.visitor_phone.replace(/\D/g, '');
+    if (form.visitor_phone && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
+      setPhoneError('Enter a valid phone number');
+      return;
+    }
+    setPhoneError('');
     onSubmit({
       ...form,
       ...(photo ? { photo } : {}),
@@ -158,7 +165,15 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
 
           <div className="space-y-2">
             <Label>Phone</Label>
-            <Input placeholder="Phone number" value={form.visitor_phone} onChange={e => update('visitor_phone', e.target.value)} />
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="Phone number (with country code if not Indian)"
+              value={form.visitor_phone}
+              onChange={e => update('visitor_phone', e.target.value.replace(/\D/g, '').slice(0, 15))}
+              maxLength={15}
+            />
+            {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

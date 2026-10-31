@@ -23,7 +23,8 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
     if (!email.trim()) { setError('Email is required'); return; }
     if (!phone.trim()) { setError('Phone number is required'); return; }
     if (!flatNumber.trim()) { setError('Flat number is required'); return; }
-    if (phone && phone.length !== 10) { setError('Phone number must be exactly 10 digits'); return;} 
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phone && (phoneDigits.length < 7 || phoneDigits.length > 15)) { setError('Enter a valid phone number'); return; } 
     setIsLoading(true);
     try {
       if (isEdit) {
@@ -123,11 +124,16 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             <Label className="text-xs">Contact Number<span className="text-destructive">*</span></Label>
             <Input
               type="tel"
-              inputMode="numeric"
-              placeholder="e.g. 9876543210"
+              inputMode="tel"
+              placeholder="e.g. 9876543210 or +971501234567"
               value={phone}
-              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              maxLength={10}
+              onChange={e => {
+                const raw = e.target.value;
+                const hasPlus = raw.trim().startsWith('+');
+                const digits = raw.replace(/\D/g, '').slice(0, 15);
+                setPhone(hasPlus ? `+${digits}` : digits);
+              }}
+              maxLength={16}
             />
           </div>
           <div className="space-y-1.5">
