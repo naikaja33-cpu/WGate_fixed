@@ -24,7 +24,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
     if (!phone.trim()) { setError('Phone number is required'); return; }
     if (!flatNumber.trim()) { setError('Flat number is required'); return; }
     const phoneDigits = phone.replace(/\D/g, '');
-    if (phone && (phoneDigits.length < 7 || phoneDigits.length > 15)) { setError('Enter a valid phone number'); return; } 
+    if (phone && (phoneDigits.length < 10 || phoneDigits.length > 10)) { setError('Enter a valid phone number'); return; } 
     setIsLoading(true);
     try {
       if (isEdit) {
@@ -114,7 +114,7 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             <Input
               placeholder="e.g. Rahul Sharma"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => setName(e.target.value.replace(/[^\p{L}\p{M}\s.'-]/gu, ''))}
               disabled={isEdit}
             />
           </div>

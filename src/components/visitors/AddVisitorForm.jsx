@@ -101,7 +101,7 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
     // }
     setFlatError('');
     const phoneDigits = form.visitor_phone.replace(/\D/g, '');
-    if (form.visitor_phone && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
+    if (form.visitor_phone && (phoneDigits.length < 10 || phoneDigits.length > 10)) {
       setPhoneError('Enter a valid phone number');
       return;
     }
@@ -160,7 +160,14 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
 
           <div className="space-y-2">
             <Label>Visitor Name *</Label>
-            <Input placeholder="Full name" value={form.visitor_name} onChange={e => update('visitor_name', e.target.value)} required />
+            <Input
+              placeholder="Full name"
+              value={form.visitor_name}
+              onChange={e => update('visitor_name', e.target.value.replace(/[^\p{L}\p{M}\s.'-]/gu, ''))}
+              maxLength={60}
+              required
+            />
+            {/* <Input placeholder="Full name" value={form.visitor_name} onChange={e => update('visitor_name', e.target.value)} required /> */}
           </div>
 
           <div className="space-y-2">

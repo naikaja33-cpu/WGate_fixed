@@ -40,7 +40,7 @@ export default function Signup() {
     if (!form.society_name.trim()) return setError('Society name is required');
     if (!form.email.trim()) return setError('Email is required');
     if (!form.password || form.password.length < 6) return setError('Password must be at least 6 characters');
-    if (form.phone && (form.phone.length < 7 || form.phone.length > 15)) return setError('Enter a valid phone number');
+    if (form.phone && (form.phone.length < 10 || form.phone.length > 10)) return setError('Enter a valid phone number');
 
     setIsSubmitting(true);
     try {
@@ -118,7 +118,15 @@ export default function Signup() {
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-3">Your admin account</p>
           <div className="space-y-1.5">
             <Label htmlFor="signup-name">Full Name</Label>
-            <Input id="signup-name" value={form.full_name} onChange={setField('full_name')} />
+                        <Input
+              id="signup-name"
+              value={form.full_name}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, full_name: e.target.value.replace(/[^\p{L}\p{M}\s.'-]/gu, '') }))
+              }
+              maxLength={60}
+            />
+            {/* <Input id="signup-name" value={form.full_name} onChange={setField('full_name')} /> */}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="signup-email">Email *</Label>
@@ -131,10 +139,10 @@ export default function Signup() {
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              maxLength={15}
+              maxLength={10}
               value={form.phone}
               onChange={setPhone}
-              placeholder="Mobile number (with country code if not Indian)"
+              placeholder="Mobile number"// (with country code if not Indian)"
             />
           </div>
           <div className="space-y-1.5">

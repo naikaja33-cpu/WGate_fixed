@@ -58,7 +58,7 @@ export default function Home() {
               type="tel"
               placeholder="Phone number"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 15))}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               required
             />
             <Select value={reason} onValueChange={setReason} required>
