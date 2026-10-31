@@ -168,10 +168,10 @@ export default function AddVisitorForm({ onSubmit, onClose, isSubmitting }) {
             <Input
               type="tel"
               inputMode="numeric"
-              placeholder="Phone number (with country code if not Indian)"
+              placeholder="Phone number "//(with country code if not Indian)"
               value={form.visitor_phone}
-              onChange={e => update('visitor_phone', e.target.value.replace(/\D/g, '').slice(0, 15))}
-              maxLength={15}
+              onChange={e => update('visitor_phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+              maxLength={10}
             />
             {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>

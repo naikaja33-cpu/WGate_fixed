@@ -130,10 +130,10 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
               onChange={e => {
                 const raw = e.target.value;
                 const hasPlus = raw.trim().startsWith('+');
-                const digits = raw.replace(/\D/g, '').slice(0, 15);
+                const digits = raw.replace(/\D/g, '').slice(0, 10);
                 setPhone(hasPlus ? `+${digits}` : digits);
               }}
-              maxLength={16}
+              maxLength={10}
             />
           </div>
           <div className="space-y-1.5">
