@@ -24,6 +24,7 @@ import PreApprovals from '@/pages/PreApprovals';
 import GatePasses from '@/pages/GatePasses';
 import Home from '@/pages/Home';
 import { Capacitor } from '@capacitor/core';
+import UpdateBanner from '@/components/UpdateBanner';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -97,6 +98,7 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
+          <UpdateBanner />
           <NotificationProvider>
             <AuthenticatedApp />
           </NotificationProvider>
