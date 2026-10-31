@@ -1,5 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1",
-  "notes": "Clear Data, plan management and scrolling improvements"
+  "versionCode": 3,
+  "versionName": "1.2",
+  "minVersionCode": 1,
+  "notes": "Describe what's new"
 }

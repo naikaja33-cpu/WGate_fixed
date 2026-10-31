@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
-
+// Single source of truth: public/version.json drives the APK version.
+def versionFile = new groovy.json.JsonSlurper().parse(file("../../public/version.json"))
 android {
     namespace = "com.wgate.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +8,8 @@ android {
         applicationId "com.wgate.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode versionFile.versionCode as int
+        versionName versionFile.versionName as String
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
