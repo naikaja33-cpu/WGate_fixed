@@ -10,7 +10,7 @@ import { useMutation } from '@tanstack/react-query';
 
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
-  const [flat, setFlat] = useState(user?.flat_number || '');
+  //const [flat, setFlat] = useState(user?.flat_number || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [saved, setSaved] = useState(false);
   const [phoneError, setPhoneError] = useState('');
@@ -32,7 +32,8 @@ export default function Profile() {
       return;
     }
     setPhoneError('');
-    saveMutation.mutate({ flat_number: flat, phone });
+    saveMutation.mutate({ phone});
+    //
   };
 
   return (
@@ -65,7 +66,9 @@ export default function Profile() {
             <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Home className="w-3 h-3" /> Flat Number
             </Label>
-            <Input placeholder="e.g. A-101" value={flat} onChange={e => setFlat(e.target.value)} />
+            <Input value={user?.flat_number || ''} disabled className="bg-muted" />
+            <p className="text-xs text-muted-foreground">Only your society admin can change your flat number.</p>
+            {/* <Input placeholder="e.g. A-101" value={flat} onChange={e => setFlat(e.target.value)} /> */}
           </div>
 
           <div className="space-y-2">

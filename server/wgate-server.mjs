@@ -155,7 +155,7 @@ const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Co
 const timesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 
 const ROLES = ['admin', 'tenant', 'owner', 'guard'];
-const SELF_EDITABLE_FIELDS = ['full_name', 'phone', 'flat_number'];
+const SELF_EDITABLE_FIELDS = ['full_name', 'phone'];
 
 /* ------------------------------------------------------------------ */
 /* WhatsApp notifications (Twilio)                                    */
