@@ -2484,3 +2484,4 @@ main().catch((err) => {
   console.error('[wgate-api] Failed to start:', err.message);
   process.exit(1);
 });
+}
