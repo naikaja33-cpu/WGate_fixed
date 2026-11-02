@@ -148,9 +148,10 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Role</Label>
-            <Select value={role} onValueChange={setRole}>
+            <Select value={role} onValueChange={setRole}disabled={role === 'family'}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
+                {role === 'family' && <SelectItem value="family">Family member</SelectItem>}
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="owner">Owner</SelectItem>
                 <SelectItem value="tenant">Tenant</SelectItem>
@@ -163,8 +164,10 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             <Label className="text-xs">Flat Number<span className="text-destructive">*</span></Label>
             <Input
               placeholder="e.g. A-101"
-              value={flatNumber}
+            //   
+                          value={flatNumber}
               onChange={e => setFlatNumber(e.target.value)}
+              disabled={role === 'family'}
             />
           </div>
 

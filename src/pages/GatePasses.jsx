@@ -52,7 +52,7 @@ export default function GatePasses() {
   const role = user?.role || 'resident';
   const isAdmin = role === 'admin';
   const isGuard = role === 'guard';
-  const isResident = role === 'tenant' || role === 'owner';
+  const isResident = role === 'tenant' || role === 'owner'|| role === 'family';
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState({
@@ -123,9 +123,12 @@ export default function GatePasses() {
   const myRecords = useMemo(
     () =>
       records
-        .filter((r) => r.resident_email === user?.email)
+    //     .filter((r) => r.resident_email === user?.email)
+    //     .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1)),
+    // [records, user?.email]
+            .filter((r) => r.resident_email === user?.email || (!!user?.flat_number && r.flat_number === user.flat_number))
         .sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1)),
-    [records, user?.email]
+    [records, user?.email, user?.flat_number]
   );
   const allRecords = useMemo(
     () => [...records].sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1)),

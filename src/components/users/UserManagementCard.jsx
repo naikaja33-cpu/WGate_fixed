@@ -6,6 +6,8 @@ const roleColors = {
   owner: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   tenant: 'bg-blue-100 text-blue-700 border-blue-200',
   guard: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  family: 'bg-pink-100 text-pink-700 border-pink-200',
+
 };
 
 const roleLabels = {
@@ -13,6 +15,7 @@ const roleLabels = {
   owner: 'Owner',
   tenant: 'Tenant',
   guard: 'Security',
+  family: 'Family'
 };
 
 export default function UserManagementCard({ member, onEdit, onDelete, onApprove, onReject, onResetPassword }) {

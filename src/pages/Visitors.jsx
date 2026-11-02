@@ -13,7 +13,7 @@ export default function Visitors() {
   const role = user?.role || 'tenant';
   const isGuard = role === 'guard';
   const isAdmin = role === 'admin';
-  const isResident = role === 'tenant' || role === 'owner';
+  const isResident = role === 'tenant' || role === 'owner'|| role === 'family';
   const canAdd = isGuard || isAdmin;
 
   const [showForm, setShowForm] = useState(false);

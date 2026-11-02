@@ -229,7 +229,17 @@ const users = {
     });
   },
 };
-
+const family = {
+  list() {
+    return request('/family');
+  },
+  add(data) {
+    return request('/family', { method: 'POST', body: data });
+  },
+  remove(id) {
+    return request(`/family/${id}`, { method: 'DELETE' });
+  },
+};
 const publicApi = {
   societies: {
     async list() {
@@ -343,6 +353,7 @@ export const wgate = {
   superadmin,
   gatePass,
   admin,
+  family,
 };
 
 export default wgate;

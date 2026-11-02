@@ -37,6 +37,12 @@ const navItems = {
     { path: '/Profile', icon: User, label: 'Profile' },
     
   ],
+  family: [
+    { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
+    { path: '/Visitors', icon: Users, label: 'Visitors' },
+    { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
+    { path: '/Profile', icon: User, label: 'Profile' },
+  ],
   guard: [
     { path: '/Visitors', icon: Shield, label: 'Gate' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },

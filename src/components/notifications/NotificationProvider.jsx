@@ -28,7 +28,7 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     if (!user || user.role === 'superadmin') return;
     const role = user.role || 'tenant';
-    const isResident = role === 'tenant' || role === 'owner';
+    const isResident = role === 'tenant' || role === 'owner'|| role === 'family';
 
     // Visitor subscription — notify resident when a visitor checks in for their flat
     const unsubVisitor = wgate.entities.Visitor.subscribe((event) => {

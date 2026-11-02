@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { User, Phone, Home, Mail, Shield, LogOut } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
+import FamilySection from '@/components/family/FamilySection';
 
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
@@ -96,7 +97,7 @@ export default function Profile() {
           </Button>
         </CardContent>
       </Card>
-
+{(user?.role === 'tenant' || user?.role === 'owner') && <FamilySection />}
       <Button
         variant="outline"
         className="w-full text-destructive border-destructive/20 hover:bg-destructive/5"

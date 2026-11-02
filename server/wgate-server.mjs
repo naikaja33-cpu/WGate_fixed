@@ -154,7 +154,11 @@ const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Co
 // the other ends, in both directions.
 const timesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 
-const ROLES = ['admin', 'tenant', 'owner', 'guard'];
+const ROLES = ['admin', 'tenant', 'owner', 'guard','family'];
+// Family members: login accounts a tenant/owner adds for people living in their own flat.
+const FAMILY_RELATIONS = ['spouse', 'son', 'daughter', 'father', 'mother', 'brother', 'sister', 'other'];
+const MAX_FAMILY_PER_FLAT = 5;
+
 const SELF_EDITABLE_FIELDS = ['full_name', 'phone'];
 
 /* ------------------------------------------------------------------ */
@@ -755,7 +759,14 @@ async function cleanupOldRecords() {
 async function pruneSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= now()');
 }
-
+// A family account only works while the primary member it belongs to still exists and is active.
+async function familyAccountBlocked(schemaName, user) {
+  if (user.role !== 'family') return false;
+  const parent = UUID_RE.test(String(user.parent_user_id || ''))
+    ? await getEntityRecord(schemaName, 'User', user.parent_user_id)
+    : null;
+  return !parent || parent.disabled === true;
+}
 async function resolveSession(token) {
   if (!token) return null;
   const { rows } = await pool.query(
@@ -777,6 +788,7 @@ async function resolveSession(token) {
   const schemaName = await getSocietySchemaName(session.society_id);
   const user = await getEntityRecord(schemaName, 'User', session.user_id);
   if (!user || user.disabled) return null;
+  if (await familyAccountBlocked(schemaName, user)) return null;
   return { session, user, society, schemaName };
 }
 
@@ -997,6 +1009,9 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ message: 'Invalid email or password' });
   }
+  if (await familyAccountBlocked(schemaName, user)) {
+    return res.status(403).json({ message: 'This family account is no longer active. Please contact your society admin.' });
+  }
   const issue = societyAccessIssue(society);
   if (issue) return res.status(403).json(issue);
 
@@ -1151,7 +1166,8 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
       return res.status(400).json({ message: 'Flat number is required' });
   }
   const requested = req.body?.role;
-  const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) ? requested : 'tenant';
+  //const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) ? requested : 'tenant';
+    const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) && requested !== 'family' ? requested : 'tenant';
   const user = {
     ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
     email,
@@ -1604,8 +1620,88 @@ app.post('/api/superadmin/admins/:id/reset-password', requireAuth, requireSupera
 
   res.json({ email: updated.email, password: tempPassword });
 }));
+/* ------------------------------ family ------------------------------ */
+// A tenant or owner adds people who live in their flat. Each gets their own login, sees the
+// same visitors for the flat and can approve or reject them.
+const requirePrimaryResident = (req, res, next) =>
+  isPrimaryResident(req.user)
+    ? next()
+    : res.status(403).json({ message: 'Only the flat owner or tenant can manage family members' });
+
+app.get('/api/family', requireAuth, requireSocietySchema, requirePrimaryResident, wrap(async (req, res) => {
+  const users = await listEntity(req.schemaName, 'User');
+  res.json(users.filter((u) => u.role === 'family' && u.parent_user_id === req.user.id).map(publicUser));
+}));
+
+app.post('/api/family', requireAuth, requireSocietySchema, requirePrimaryResident, wrap(async (req, res) => {
+  const flat = String(req.user.flat_number || '').trim();
+  if (!flat) return res.status(400).json({ message: 'Your account has no flat number yet. Ask your society admin to add it.' });
+
+  const fullName = String(req.body?.full_name || '').trim();
+  if (!fullName || fullName.length > 100) return res.status(400).json({ message: "Enter the family member's name" });
+  const email = normEmail(req.body?.email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    return res.status(400).json({ message: 'Enter a valid email address' });
+  }
+  const phone = String(req.body?.phone || '').trim();
+  if (!phone || !isValidPhone(phone)) return res.status(400).json({ message: 'Enter a valid phone number' });
+  const relation = FAMILY_RELATIONS.includes(req.body?.relation) ? req.body.relation : 'other';
+
+  if (await findUserByEmail(req.schemaName, email)) {
+    return res.status(409).json({ message: 'A user with this email already exists in this society' });
+  }
+  const users = await listEntity(req.schemaName, 'User');
+  const inThisFlat = users.filter((u) => u.role === 'family' && flatKey(u.flat_number) === flatKey(flat));
+  if (inThisFlat.length >= MAX_FAMILY_PER_FLAT) {
+    return res.status(400).json({ message: `A flat can have at most ${MAX_FAMILY_PER_FLAT} family members` });
+  }
+
+  const tempPassword = generateTempPassword();
+  const member = {
+    ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
+    email,
+    password_hash: hashPassword(tempPassword),
+    full_name: fullName,
+    role: 'family',
+    relation,
+    parent_user_id: req.user.id,
+    flat_number: flat,
+    phone,
+    society_id: req.society.id,
+    society_name: req.society.name,
+    disabled: false,
+    is_verified: false,
+  };
+  await insertEntityRecord(req.schemaName, 'User', member);
+  broadcast(req.schemaName, 'User', 'create', member);
+
+  const emailResult = await sendEmail({
+    to: email,
+    ...inviteEmailContent({
+      name: fullName,
+      societyName: req.society.name,
+      email,
+      password: tempPassword,
+      role: 'family member',
+    }),
+  });
+  res.status(201).json({ ...publicUser(member), initial_password: tempPassword, email_sent: emailResult.ok });
+}));
+
+app.delete('/api/family/:id', requireAuth, requireSocietySchema, requirePrimaryResident, wrap(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ message: 'Family member not found' });
+  const member = await getEntityRecord(req.schemaName, 'User', req.params.id);
+  if (!member || member.role !== 'family' || member.parent_user_id !== req.user.id) {
+    return res.status(404).json({ message: 'Family member not found' });
+  }
+  await deleteEntityRecord(req.schemaName, 'User', member.id);
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [member.id]); // sign them out everywhere
+  broadcast(req.schemaName, 'User', 'delete', member);
+  res.json({ success: true });
+}));
 
 /* Distinct resident flat numbers — used by the guard's visitor check-in
+
    form to pick a flat instead of typing it freehand. Open to any
    authenticated role (not just admin), but only returns flat numbers,
    not full user records, so it doesn't leak other residents' PII. */
@@ -1679,7 +1775,11 @@ entityRouter.use('/:name', wrap(async (req, res, next) => {
 /* ------------------------------------------------------------------ */
 
 const isStaff = (u) => u.role === 'admin' || u.role === 'guard';
-const isResident = (u) => u.role === 'tenant' || u.role === 'owner';
+// Family members count as residents (they can approve visitors and make pre-approvals and
+// gate passes for their flat) but not as primary residents (no tickets, no billing).
+const isPrimaryResident = (u) => u.role === 'tenant' || u.role === 'owner';
+const isResident = (u) => isPrimaryResident(u) || u.role === 'family';
+//const isResident = (u) => u.role === 'tenant' || u.role === 'owner';
 const flatKey = (v) => String(v ?? '').trim().toLowerCase();
 const sameFlat = (u, r) => !!flatKey(u.flat_number) && flatKey(u.flat_number) === flatKey(r.flat_number);
 const sameEmail = (u, r) => !!u.email && !!r.resident_email && normEmail(u.email) === normEmail(r.resident_email);
@@ -1708,14 +1808,16 @@ function canRead(user, entity, record) {
     case 'PreApproval': return isStaff(user) || sameFlat(user, record);
     case 'GatePass': return isStaff(user) || sameFlat(user, record);
     case 'ServiceTicket': return isStaff(user) || sameEmail(user, record);
-    case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
+        case 'MaintenanceBill': return user.role === 'admin' || (user.role !== 'family' && (sameFlat(user, record) || sameEmail(user, record)));
+    //case 'MaintenanceBill': return user.role === 'admin' || sameFlat(user, record) || sameEmail(user, record);
     default: return false;
   }
 }
 
 function canDelete(user, entity, record) {
   if (entity === 'AmenityBooking' || entity === 'PreApproval' || entity === 'GatePass') {
-    return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
+    //return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
+        return user.role === 'admin' || (isResident(user) && record && (sameEmail(user, record) || sameFlat(user, record)));
   }
   return (WRITE_ROLES[entity] || ['admin']).includes(user.role);
 }
@@ -1897,7 +1999,8 @@ async function authorizeCreate(req, res, entity, input) {
   }
   if (entity === 'ServiceTicket') {
     if (user.role === 'admin') return body;
-    if (!isResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
+    //if (!isResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
+        if (!isPrimaryResident(user)) return denyWrite(res, 'Only residents and admins can raise tickets');
     return {
       ...pickDefined(body, ['title', 'description', 'category', 'priority']),
       flat_number: user.flat_number || body.flat_number,
@@ -1926,10 +2029,10 @@ function authorizeUpdate(req, res, entity, record, patch) {
       }
       return body;
     }
-    if (isResident(user) && sameEmail(user, record)) {
+    if (isResident(user) && (sameEmail(user, record) || sameFlat(user, record))) {
       const keys = Object.keys(body);
       const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
-      return onlyCancel ? body : denyWrite(res, 'You can only cancel your own booking');
+      return onlyCancel ? body : denyWrite(res, 'You can only cancel your own pre-approval');
     }
     return denyWrite(res);
   }
@@ -1940,11 +2043,10 @@ function authorizeUpdate(req, res, entity, record, patch) {
       }
       return body;
     }
-    if (isResident(user) && sameEmail(user, record)) {
+   if (isResident(user) && (sameEmail(user, record) || sameFlat(user, record))) {
       const keys = Object.keys(body);
       const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
-      return onlyCancel ? body : denyWrite(res, 'You can only cancel your own pre-approval');
-    }
+      if (!onlyCancel) return denyWrite(res, 'You can only cancel your own gate pass');
     return denyWrite(res);
   }
   if (entity === 'GatePass') {
@@ -2069,9 +2171,11 @@ entityRouter.get('/:name', wrap(async (req, res) => {
     try { query = JSON.parse(String(req.query.q)); } catch { return res.status(400).json({ message: 'Invalid q parameter' }); }
   }
   let rows = await listEntity(req.schemaName, entity);
-  if (entity === 'User' && req.user.role !== 'admin') {
-    rows = rows.filter((r) => canRead(req.user, entity, r));
-  }
+  // if (entity === 'User' && req.user.role !== 'admin') {
+  //   rows = rows.filter((r) => canRead(req.user, entity, r));
+  // }
+  // Only return records this person may see (their own flat's visitors, bills, passes...).
+  rows = rows.filter((r) => canRead(req.user, entity, r));
   rows = rows.filter((r) => matchesQuery(r, query));
   rows = sortRecords(rows, req.query.sort ? String(req.query.sort) : '-created_date');
   const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
@@ -2171,19 +2275,38 @@ async function updateHandler(req, res) {
       patch.password_hash = hashPassword(patch.password);
     }
     delete patch.password;
-    if (patch.role !== undefined && !ROLES.includes(patch.role)) {
+    // 
+        if (patch.role !== undefined && !ROLES.includes(patch.role)) {
       return res.status(400).json({ message: `Invalid role. Use one of: ${ROLES.join(', ')}` });
+    }
+    if (patch.role !== undefined && (patch.role === 'family') !== (record.role === 'family')) {
+      return res.status(400).json({ message: 'Family accounts are added by the flat owner or tenant, and their role cannot be changed' });
+    }
+    if (record.role === 'family') {
+      delete patch.flat_number; // a family member's flat always follows the primary member
     }
     if (record.id === req.user.id && patch.role && patch.role !== 'admin') {
       return res.status(400).json({ message: 'You cannot remove your own admin role' });
     }
   }
 
+  // const updated = { ...record, ...patch, updated_date: nowIso() };
+  // await updateEntityRecord(req.schemaName, entity, req.params.id, updated);
+  // broadcast(req.schemaName, entity, 'update', updated);
+  // res.json(clean(entity, updated));
   const updated = { ...record, ...patch, updated_date: nowIso() };
   await updateEntityRecord(req.schemaName, entity, req.params.id, updated);
   broadcast(req.schemaName, entity, 'update', updated);
+  if (entity === 'User' && record.role !== 'family' && patch.flat_number !== undefined && patch.flat_number !== record.flat_number) {
+    const familyOfRecord = (await listEntity(req.schemaName, 'User'))
+      .filter((u) => u.role === 'family' && u.parent_user_id === record.id);
+    for (const member of familyOfRecord) {
+      const moved = { ...member, flat_number: updated.flat_number, updated_date: nowIso() };
+      await updateEntityRecord(req.schemaName, 'User', member.id, moved);
+      broadcast(req.schemaName, 'User', 'update', moved);
+    }
+  }
   res.json(clean(entity, updated));
-
   // Fire-and-forget: notify the resident over WhatsApp the moment their
   // ticket is actually closed (not on every edit — only on the transition
   // into resolved/closed), using the phone number on their own User record.
