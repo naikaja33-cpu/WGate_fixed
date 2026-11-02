@@ -157,7 +157,7 @@ const timesOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < a
 const ROLES = ['admin', 'tenant', 'owner', 'guard','family'];
 // Family members: login accounts a tenant/owner adds for people living in their own flat.
 const FAMILY_RELATIONS = ['spouse', 'son', 'daughter', 'father', 'mother', 'brother', 'sister', 'other'];
-const MAX_FAMILY_PER_FLAT = 5;
+const MAX_FAMILY_PER_FLAT = 1;
 
 const SELF_EDITABLE_FIELDS = ['full_name', 'phone'];
 
