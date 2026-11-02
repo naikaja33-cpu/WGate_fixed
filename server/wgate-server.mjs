@@ -2043,10 +2043,12 @@ function authorizeUpdate(req, res, entity, record, patch) {
       }
       return body;
     }
-   if (isResident(user) && (sameEmail(user, record) || sameFlat(user, record))) {
+    if (isResident(user) && (sameEmail(user, record) || sameFlat(user, record))) {
       const keys = Object.keys(body);
       const onlyCancel = keys.length === 1 && keys[0] === 'status' && body.status === 'cancelled';
       if (!onlyCancel) return denyWrite(res, 'You can only cancel your own gate pass');
+      return body;
+    }
     return denyWrite(res);
   }
   if (entity === 'GatePass') {
@@ -2171,11 +2173,11 @@ entityRouter.get('/:name', wrap(async (req, res) => {
     try { query = JSON.parse(String(req.query.q)); } catch { return res.status(400).json({ message: 'Invalid q parameter' }); }
   }
   let rows = await listEntity(req.schemaName, entity);
-  // if (entity === 'User' && req.user.role !== 'admin') {
-  //   rows = rows.filter((r) => canRead(req.user, entity, r));
-  // }
-  // Only return records this person may see (their own flat's visitors, bills, passes...).
+  if (entity === 'User' && req.user.role !== 'admin') {
   rows = rows.filter((r) => canRead(req.user, entity, r));
+  }
+  // Only return records this person may see (their own flat's visitors, bills, passes...).
+  
   rows = rows.filter((r) => matchesQuery(r, query));
   rows = sortRecords(rows, req.query.sort ? String(req.query.sort) : '-created_date');
   const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
@@ -2484,4 +2486,3 @@ main().catch((err) => {
   console.error('[wgate-api] Failed to start:', err.message);
   process.exit(1);
 });
-}
