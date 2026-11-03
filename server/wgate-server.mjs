@@ -46,7 +46,7 @@ const PORT = Number(process.env.WGATE_API_PORT || process.env.PORT || 4400);
 // server to bind all interfaces, not just the loopback address.
 const HOST = process.env.WGATE_API_HOST || '0.0.0.0';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const DEFAULT_INVITE_PASSWORD = 'welcome123';
+//const DEFAULT_INVITE_PASSWORD = 'welcome123';
 // How long a society's trial runs once the super admin approves it, and
 // how many extra days it still gets in after the trial ends before login
 // is hard-locked. During the grace period the society can still log in and
@@ -905,7 +905,97 @@ const clean = (entity, record) => (entity === 'User' ? publicUser(record) : reco
 /* App                                                                */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Rate limiting                                                      */
+/* ------------------------------------------------------------------ */
+
+// In-memory fixed-window limiter. State lives in this process only, which is
+// fine for a single Render instance; move to Redis if you ever run several.
+function createLimiter({ windowMs, max }) {
+  const hits = new Map(); // key -> { count, resetAt }
+  const sweep = () => {
+    const now = Date.now();
+    for (const [key, entry] of hits) if (entry.resetAt <= now) hits.delete(key);
+  };
+  setInterval(sweep, 60 * 1000).unref();
+  const entryFor = (key) => {
+    const now = Date.now();
+    let entry = hits.get(key);
+    if (!entry || entry.resetAt <= now) {
+      if (hits.size >= 50000) { sweep(); if (hits.size >= 50000) hits.clear(); } // memory guard
+      entry = { count: 0, resetAt: now + windowMs };
+      hits.set(key, entry);
+    }
+    return entry;
+  };
+  return {
+    max,
+    hit: (key) => { const entry = entryFor(key); entry.count += 1; return entry; },
+    // Seconds until the key may try again, or 0 if it is not blocked.
+    blockedFor: (key) => {
+      const entry = hits.get(key);
+      if (!entry || entry.resetAt <= Date.now() || entry.count < max) return 0;
+      return Math.ceil((entry.resetAt - Date.now()) / 1000);
+    },
+    reset: (key) => { hits.delete(key); },
+  };
+}
+
+function sendTooMany(res, seconds, message) {
+  res.set('Retry-After', String(seconds));
+  return res.status(429).json({ message, code: 'rate_limited', retry_after: seconds });
+}
+
+// Express middleware: counts every request for keyFn(req) and answers 429 past `max`.
+function rateLimit({ windowMs, max, keyFn, message }) {
+  const limiter = createLimiter({ windowMs, max });
+  return (req, res, next) => {
+    const entry = limiter.hit(keyFn(req));
+    if (entry.count > max) {
+      return sendTooMany(res, Math.ceil((entry.resetAt - Date.now()) / 1000), message);
+    }
+    next();
+  };
+}
+
+const clientIp = (req) => req.ip || req.socket?.remoteAddress || 'unknown';
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+
+// Many residents can share one society Wi-Fi (one public IP), so the per-IP
+// limits are generous; the tight limit is on failed logins per IP + account.
+const loginIpLimit = rateLimit({
+  windowMs: 15 * MINUTE, max: 100, keyFn: (req) => `login:${clientIp(req)}`,
+  message: 'Too many sign-in attempts. Please wait a few minutes and try again.',
+});
+const loginFailures = createLimiter({ windowMs: 15 * MINUTE, max: 8 });
+const signupLimit = rateLimit({
+  windowMs: HOUR, max: 5, keyFn: (req) => `signup:${clientIp(req)}`,
+  message: 'Too many sign-up attempts. Please try again later.',
+});
+const forgotPasswordLimit = rateLimit({
+  windowMs: HOUR, max: 10, keyFn: (req) => `forgot:${clientIp(req)}`,
+  message: 'Too many password reset requests. Please try again later.',
+});
+const inviteLimit = rateLimit({
+  windowMs: HOUR, max: 100, keyFn: (req) => `invite:${req.user?.id || clientIp(req)}`,
+  message: 'You have sent too many invitations. Please try again later.',
+});
+const adminResetLimit = rateLimit({
+  windowMs: HOUR, max: 60, keyFn: (req) => `adminreset:${req.user?.id || clientIp(req)}`,
+  message: 'Too many password resets. Please try again later.',
+});
+const changePasswordLimit = rateLimit({
+  windowMs: 15 * MINUTE, max: 10, keyFn: (req) => `chgpw:${req.user?.id || clientIp(req)}`,
+  message: 'Too many attempts. Please wait a few minutes and try again.',
+});
+
 const app = express();
+app.disable('x-powered-by');
+// Render terminates TLS in front of the app. Trusting one proxy hop makes
+// req.ip the real client address (otherwise every user shares the proxy's IP
+// and the limits would hit everyone at once). Set TRUST_PROXY=0 locally if needed.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -935,7 +1025,7 @@ app.get('/api/public/societies', wrap(async (_req, res) => {
    society starts unapproved: nobody in it can log in until a super admin
    approves it (see POST /api/superadmin/societies/:id/approve), at which
    point its trial period starts. */
-app.post('/api/signup', wrap(async (req, res) => {
+app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   const name = String(req.body?.society_name || '').trim();
   if (!name) return res.status(400).json({ message: 'Society name is required' });
 
@@ -983,19 +1073,29 @@ app.post('/api/signup', wrap(async (req, res) => {
 
 /* ---------------------------- auth ---------------------------- */
 
-app.post('/api/auth/login', wrap(async (req, res) => {
+app.post('/api/auth/login', loginIpLimit, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   const password = req.body?.password;
   const requestedSocietyId = req.body?.society_id || null;
   if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
 
+  // Repeated wrong passwords for the same account from the same address are
+  // locked out for the rest of the window; a correct login clears the count.
+  const failKey = `${clientIp(req)}|${requestedSocietyId || 'superadmin'}|${email}`;
+  const lockedFor = loginFailures.blockedFor(failKey);
+  if (lockedFor) {
+    return sendTooMany(res, lockedFor, 'Too many failed sign-in attempts. Please wait a few minutes and try again.');
+  }
+  const badCredentials = () => {
+    loginFailures.hit(failKey);
+    return res.status(401).json({ message: 'Invalid email or password' });
+  };
   if (!requestedSocietyId) {
     // No society selected — this is the super admin login path.
     const { rows } = await pool.query('SELECT * FROM superadmins WHERE email = $1', [email]);
     const sa = rows[0];
-    if (!sa || sa.disabled || !verifyPassword(password, sa.password_hash)) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
+    if (!sa || sa.disabled || !verifyPassword(password, sa.password_hash)) return badCredentials();
+    loginFailures.reset(failKey);
     await pruneSessions();
     const token = await createSession(sa.id, null);
     return res.json({ token, user: publicUser(superadminRowToUser(sa)) });
@@ -1006,9 +1106,8 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const schemaName = await getSocietySchemaName(requestedSocietyId);
 
   const user = await findUserByEmail(schemaName, email);
-  if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
-    return res.status(401).json({ message: 'Invalid email or password' });
-  }
+  if (!user || user.disabled || !verifyPassword(password, user.password_hash)) return badCredentials();
+  loginFailures.reset(failKey);
   if (await familyAccountBlocked(schemaName, user)) {
     return res.status(403).json({ message: 'This family account is no longer active. Please contact your society admin.' });
   }
@@ -1060,7 +1159,7 @@ app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
   res.json(publicUser(updated));
 }));
 
-app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
+app.post('/api/auth/change-password', requireAuth, changePasswordLimit, wrap(async (req, res) => {
   const { current_password: current, new_password: next } = req.body || {};
   if (!verifyPassword(current, req.user.password_hash)) {
     return res.status(400).json({ message: 'Current password is incorrect' });
@@ -1087,7 +1186,7 @@ app.post('/api/auth/change-password', requireAuth, wrap(async (req, res) => {
    screen without being signed in. This does NOT reset the password itself —
    it only files a request for the society's admin to act on, since there is
    no email/SMS sending configured to verify the requester's identity safely. */
-app.post('/api/auth/forgot-password', wrap(async (req, res) => {
+app.post('/api/auth/forgot-password',forgotPasswordLimit, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   const societyId = req.body?.society_id;
   const genericResponse = { message: 'If that email exists in this society, your admin has been notified.' };
@@ -1150,7 +1249,7 @@ function inviteEmailContent({ name, societyName, email, password, role }) {
   return { subject, html, text };
 }
 /* Invite a member */
-app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema,inviteLimit, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });
   if (await findUserByEmail(req.schemaName, email)) {
@@ -1168,10 +1267,11 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
   const requested = req.body?.role;
   //const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) ? requested : 'tenant';
     const role = requested === 'admin' ? 'admin' : ROLES.includes(requested) && requested !== 'family' ? requested : 'tenant';
-  const user = {
+  const tempPassword = generateTempPassword();
+    const user = {
     ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
     email,
-    password_hash: hashPassword(DEFAULT_INVITE_PASSWORD),
+    password_hash: hashPassword(tempPassword),
     full_name: req.body?.full_name || email.split('@')[0],
     role,
     flat_number: req.body?.flat_number || '',
@@ -1189,14 +1289,14 @@ app.post('/api/users/invite', requireAuth, requireAdmin, requireSocietySchema, w
       name: user.full_name,
       societyName: req.society.name,
       email: user.email,
-      password: DEFAULT_INVITE_PASSWORD,
+      password: tempPassword,
       role: user.role,
     }),
   });
 
   res.status(201).json({
     ...publicUser(user),
-    initial_password: DEFAULT_INVITE_PASSWORD,
+    initial_password: tempPassword,
     email_sent: emailResult.ok,
     email_error: emailResult.ok ? undefined : emailResult.error,
   });
@@ -1243,7 +1343,7 @@ function passwordResetEmailContent({ name, societyName, email, password }) {
   return { subject, html, text };
 }
 
-app.post('/api/users/:id/reset-password', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+app.post('/api/users/:id/reset-password', requireAuth, requireAdmin, requireSocietySchema,adminResetLimit, wrap(async (req, res) => {
   if (!UUID_RE.test(req.params.id)) return res.status(404).json({ message: 'Member not found' });
   if (req.params.id === req.user.id) {
     return res.status(400).json({ message: 'To change your own password, use your Profile page' });
@@ -1565,11 +1665,11 @@ app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (r
   if (await findUserByEmail(schemaName, email)) {
     return res.status(409).json({ message: 'A user with this email already exists in this society' });
   }
-
+const tempPassword = generateTempPassword();
   const adminUser = {
     ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
     email,
-    password_hash: hashPassword(DEFAULT_INVITE_PASSWORD),
+    password_hash: hashPassword(tempPassword),
     full_name: req.body?.full_name || email.split('@')[0],
     role: 'admin',
     flat_number: req.body?.flat_number || '',
@@ -1581,7 +1681,8 @@ app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (r
     must_change_password: true,
   };
   await insertEntityRecord(schemaName, 'User', adminUser);
-  res.status(201).json({ ...publicUser(adminUser), initial_password: DEFAULT_INVITE_PASSWORD });
+    res.status(201).json({ ...publicUser(adminUser), initial_password: tempPassword });
+  // res.status(201).json({ ...publicUser(adminUser), initial_password: DEFAULT_INVITE_PASSWORD });
 }));
 
 app.get('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (_req, res) => {
@@ -2152,7 +2253,8 @@ async function buildRecord(schemaName, entity, input, actor, activeSociety) {
     }
     record.society_id = activeSociety.id;
     record.society_name = activeSociety.name;
-    record.password_hash = hashPassword(record.password || DEFAULT_INVITE_PASSWORD);
+        record.password_hash = hashPassword(record.password || generateTempPassword());
+    // record.password_hash = hashPassword(record.password || DEFAULT_INVITE_PASSWORD);
     delete record.password;
   }
   if (entity === 'Notice' || entity === 'SocietySettings') {
