@@ -1,6 +1,6 @@
 {
-  "versionCode": 5.2,
+  "versionCode": 6,
   "versionName": "1.6",
-  "minVersionCode": 5.2,
+  "minVersionCode": 6,
   "notes": "Family addition, billing and payment features added. Bug fixes and performance improvements."
 }
