@@ -638,6 +638,8 @@ const CLEARABLE_ENTITIES = [
   { key: 'AmenityBooking', label: 'Amenity Bookings' },
   { key: 'PreApproval', label: 'Pre-Approvals' },
   { key: 'GatePass', label: 'Gate Passes' },
+  { key: 'MaintenanceBill', label: 'Maintenance Bills (all billing records)' },
+  { key: 'FlatArea', label: 'Flat Sizes (sq ft)' },
 ];
 
 function ClearDataModal({ society, onClose }) {
@@ -657,6 +659,15 @@ function ClearDataModal({ society, onClose }) {
     }
     const names = selected.map((k) => CLEARABLE_ENTITIES.find((e) => e.key === k)?.label).join(', ');
     if (!window.confirm(`Permanently delete ALL ${names} for "${society.name}"? This cannot be undone.`)) return;
+    if (selected.includes('MaintenanceBill')) {
+      const typed = window.prompt(
+        `Bills are financial records. This permanently deletes every bill (paid and unpaid) for "${society.name}".\n\nType the society name to confirm:`
+      );
+      if (typed === null || typed.trim().toLowerCase() !== String(society.name).trim().toLowerCase()) {
+        setError('Billing was not cleared: the society name did not match.');
+        return;
+      }
+    }
     setIsClearing(true);
     try {
       const res = await wgate.superadmin.clearSocietyData(society.id, selected);
@@ -674,7 +685,7 @@ function ClearDataModal({ society, onClose }) {
         <div>
           <h2 className="text-lg font-semibold">Clear Data</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Permanently delete ALL records of the selected type(s) for {society.name} — not just old/closed ones. Members, notices, and billing are never affected here.
+            Permanently delete ALL records of the selected type(s) for {society.name} — not just old/closed ones. Members and notices are never affected here. Billing is cleared only if you tick it.
           </p>
         </div>
 

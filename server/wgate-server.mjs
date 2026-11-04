@@ -2559,7 +2559,7 @@ app.post('/api/superadmin/cleanup', requireAuth, requireSuperadmin, wrap(async (
   res.json({ success: true, message: 'Cleanup pass complete' });
 }));
 
-const CLEARABLE_ENTITIES = ['GatePass', 'PreApproval', 'AmenityBooking', 'Visitor', 'ServiceTicket'];
+const CLEARABLE_ENTITIES = ['GatePass', 'PreApproval', 'AmenityBooking', 'Visitor', 'ServiceTicket','MaintenanceBill', 'FlatArea'];
 
 app.post('/api/superadmin/societies/:id/clear-data', requireAuth, requireSuperadmin, wrap(async (req, res) => {
   const society = await getSocietyById(req.params.id);
