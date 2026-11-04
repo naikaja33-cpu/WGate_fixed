@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass','FlatArea'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -1611,6 +1611,7 @@ const MENU_FOR_ENTITY = {
   ServiceTicket: 'ServiceTickets',
   Notice: 'NoticeBoard',
   MaintenanceBill: 'Billing',
+  FlatArea: 'Billing',
   AmenityBooking: 'Amenities',
   // Rides along with the existing Visitors toggle — no new super admin
   // menu entry needed, since pre-approvals are part of gate management.
@@ -1892,6 +1893,7 @@ const WRITE_ROLES = {
   User: ['admin'],
   SocietySettings: ['admin'],
   MaintenanceBill: ['admin'],
+  FlatArea: ['admin'],
   Notice: ['admin', 'guard'],
 };
 
@@ -1903,6 +1905,7 @@ function canRead(user, entity, record) {
     // Everyone in the society can see all bookings (not just their own) so
     // the booking form can show which slots are already taken.
     case 'AmenityBooking': return true;
+    case 'FlatArea': return user.role === 'admin' || (user.role !== 'family' && sameFlat(user, record));
     case 'Visitor': return isStaff(user) || sameFlat(user, record);
     // Guards need to see the list too, to recognize an expected daily
     // maid/cook/nanny or guest at the gate.
@@ -1936,6 +1939,25 @@ const pickDefined = (obj, keys) =>
 async function authorizeCreate(req, res, entity, input) {
   const user = req.user;
   const body = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {};
+    if (entity === 'FlatArea') {
+    if (user.role !== 'admin') return denyWrite(res);
+    const flat = String(body.flat_number || '').trim();
+    const area = Number(body.area_sqft);
+    if (!flat || flat.length > 20) {
+      res.status(400).json({ message: 'Flat number is required' });
+      return null;
+    }
+    if (!Number.isFinite(area) || area <= 0 || area > 100000) {
+      res.status(400).json({ message: 'Area must be a number between 1 and 100000 sq ft' });
+      return null;
+    }
+    const existingAreas = await listEntity(req.schemaName, 'FlatArea');
+    if (existingAreas.some((r) => flatKey(r.flat_number) === flatKey(flat))) {
+      res.status(409).json({ message: `Flat ${flat} already has a size. Edit it instead.` });
+      return null;
+    }
+    return { flat_number: flat, area_sqft: area };
+  }
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
@@ -2116,6 +2138,15 @@ async function authorizeCreate(req, res, entity, input) {
 function authorizeUpdate(req, res, entity, record, patch) {
   const user = req.user;
   const body = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
+    if (entity === 'FlatArea') {
+    if (user.role !== 'admin') return denyWrite(res);
+    const area = Number(body.area_sqft);
+    if (!Number.isFinite(area) || area <= 0 || area > 100000) {
+      res.status(400).json({ message: 'Area must be a number between 1 and 100000 sq ft' });
+      return null;
+    }
+    return { area_sqft: area };
+  }
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
@@ -2275,7 +2306,8 @@ entityRouter.get('/:name', wrap(async (req, res) => {
     try { query = JSON.parse(String(req.query.q)); } catch { return res.status(400).json({ message: 'Invalid q parameter' }); }
   }
   let rows = await listEntity(req.schemaName, entity);
-  if (entity === 'User' && req.user.role !== 'admin') {
+  // entity === 'User' &&
+  if ( req.user.role !== 'admin') {
   rows = rows.filter((r) => canRead(req.user, entity, r));
   }
   // Only return records this person may see (their own flat's visitors, bills, passes...).

@@ -27,6 +27,12 @@ export default function BillCard({ bill, onMarkPaid, isAdmin }) {
         {Number(bill.amount).toLocaleString()}
       </div>
 
+            {bill.area_sqft > 0 && bill.rate_per_sqft > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {Number(bill.area_sqft).toLocaleString('en-IN')} sq ft × ₹{Number(bill.rate_per_sqft).toLocaleString('en-IN')} per sq ft
+        </p>
+      )}
+
       {bill.line_items?.length > 0 && (
         <div className="bg-muted rounded-xl p-3 space-y-1">
           {bill.line_items.map((item, i) => (
