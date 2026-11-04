@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, CheckCircle2, Clock, IndianRupee } from 'lucide-react';
 import { format } from 'date-fns';
+import { effectiveStatus, lateFineFor } from '@/lib/billing';
 
 const statusStyles = {
   pending: 'bg-amber-100 text-amber-700 border-amber-200',
@@ -10,6 +11,10 @@ const statusStyles = {
 };
 
 export default function BillCard({ bill, onMarkPaid, isAdmin }) {
+  const status = effectiveStatus(bill);
+  const fine = lateFineFor(bill);
+  const fineConfigured = Math.round(Number(bill.late_fine) || 0);
+  const finePaid = Math.round(Number(bill.fine_applied) || 0);
   return (
     <div className="bg-card rounded-2xl border border-border p-4 space-y-3 hover:shadow-md transition-all">
       <div className="flex items-start justify-between">
@@ -18,7 +23,7 @@ export default function BillCard({ bill, onMarkPaid, isAdmin }) {
           <p className="text-xs text-muted-foreground mt-0.5">Flat {bill.flat_number}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className={`text-xs border capitalize ${statusStyles[bill.status]}`}>{bill.status}</Badge>
+          <Badge className={`text-xs border capitalize ${statusStyles[status]}`}>{status}</Badge>
         </div>
       </div>
 
@@ -27,7 +32,23 @@ export default function BillCard({ bill, onMarkPaid, isAdmin }) {
         {Number(bill.amount).toLocaleString()}
       </div>
 
-            {bill.area_sqft > 0 && bill.rate_per_sqft > 0 && (
+                  {status === 'overdue' && fine > 0 && (
+        <p className="text-sm font-medium text-red-600">
+          + ₹{fine.toLocaleString('en-IN')} late fine · Total due ₹{(Number(bill.amount) + fine).toLocaleString('en-IN')}
+        </p>
+      )}
+      {status === 'pending' && fineConfigured > 0 && (
+        <p className="text-xs text-amber-700">
+          A late fine of ₹{fineConfigured.toLocaleString('en-IN')} applies if paid after the due date.
+        </p>
+      )}
+      {status === 'paid' && finePaid > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Includes late fine ₹{finePaid.toLocaleString('en-IN')} · Paid ₹{(Number(bill.amount) + finePaid).toLocaleString('en-IN')}
+        </p>
+      )}
+
+      {bill.area_sqft > 0 && bill.rate_per_sqft > 0 && (
         <p className="text-xs text-muted-foreground">
           {Number(bill.area_sqft).toLocaleString('en-IN')} sq ft × ₹{Number(bill.rate_per_sqft).toLocaleString('en-IN')} per sq ft
         </p>

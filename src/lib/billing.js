@@ -5,6 +5,41 @@ export const formatSqft = (n) =>
 
 export const formatMoney = (n) => Number(n || 0).toLocaleString('en-IN');
 
+// ---- Late fine: a flat fee added once when a bill is paid after its due date (no grace days) ----
+
+// Today as 'yyyy-MM-dd' in the viewer's own time zone.
+export const todayString = (d = new Date()) =>
+  new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+const dueDay = (bill) => (bill?.due_date ? String(bill.due_date).slice(0, 10) : '');
+const fineOf = (bill) => Math.max(0, Math.round(Number(bill?.late_fine) || 0));
+
+// 'paid', 'overdue' (unpaid and the due date has passed) or 'pending'.
+export function effectiveStatus(bill, today = todayString()) {
+  if (bill?.status === 'paid') return 'paid';
+  if (bill?.status === 'overdue') return 'overdue';
+  const due = dueDay(bill);
+  return due && due < today ? 'overdue' : 'pending';
+}
+
+// The fine that applies to an unpaid bill right now.
+export function lateFineFor(bill, today = todayString()) {
+  return effectiveStatus(bill, today) === 'overdue' ? fineOf(bill) : 0;
+}
+
+// The fine for paying on `paidDate` ('yyyy-MM-dd'): only when that day is after the due date.
+export function fineForPayment(bill, paidDate) {
+  const due = dueDay(bill);
+  return due && String(paidDate) > due ? fineOf(bill) : 0;
+}
+
+// What the flat owes now (unpaid) or paid (paid), fine included.
+export function amountDue(bill, today = todayString()) {
+  const base = Number(bill?.amount) || 0;
+  if (bill?.status === 'paid') return Number(bill.amount_paid ?? base + (Number(bill.fine_applied) || 0)) || 0;
+  return base + lateFineFor(bill, today);
+}
+
 // Keeps only fixed charges that have a name and an amount above zero (whole rupees).
 export function cleanExtraItems(items) {
   return (items || [])

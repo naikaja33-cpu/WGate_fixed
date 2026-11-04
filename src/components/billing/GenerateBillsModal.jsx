@@ -13,12 +13,13 @@ import { buildBillRows, formatMoney, formatSqft } from '@/lib/billing';
  *  - existingBills: bills already created, so a flat is never billed twice for the same month
  *  - defaultRate:   the rate used last time (pre-filled)
  */
-export default function GenerateBillsModal({ onGenerate, onClose, isGenerating, areas, existingBills, defaultRate }) {
+export default function GenerateBillsModal({ onGenerate, onClose, isGenerating, areas, existingBills, defaultRate, defaultLateFine }) {
   const now = new Date();
   const [month, setMonth] = useState(format(now, 'yyyy-MM'));
   const [monthLabel, setMonthLabel] = useState(format(now, 'MMMM yyyy'));
   const [dueDate, setDueDate] = useState(format(addDays(now, 15), 'yyyy-MM-dd'));
-  const [rate, setRate] = useState(defaultRate ? String(defaultRate) : '');
+    const [rate, setRate] = useState(defaultRate ? String(defaultRate) : '');
+  const [lateFine, setLateFine] = useState(defaultLateFine ? String(defaultLateFine) : '');
   const [extraItems, setExtraItems] = useState([]); // optional fixed charges, e.g. Water, Sinking Fund
 
   const [flats, setFlats] = useState([]);
@@ -67,7 +68,10 @@ export default function GenerateBillsModal({ onGenerate, onClose, isGenerating, 
   };
 
   const handleGenerate = () => {
-    onGenerate({ month, monthLabel, dueDate, rate: Number(rate), rows: selectedRows });
+        onGenerate({
+      month, monthLabel, dueDate, rate: Number(rate), rows: selectedRows,
+      lateFine: Math.max(0, Math.round(Number(lateFine) || 0)),
+    });
   };
 
   return (
@@ -96,7 +100,16 @@ export default function GenerateBillsModal({ onGenerate, onClose, isGenerating, 
           <Label className="text-xs">Maintenance rate (₹ per sq ft, per month)</Label>
           <Input type="number" inputMode="decimal" min="0" step="0.01" placeholder="e.g. 3.50"
             value={rate} onChange={(e) => setRate(e.target.value)} />
-          <p className="text-xs text-muted-foreground">Each flat's bill = its size in sq ft × this rate.</p>
+                    <p className="text-xs text-muted-foreground">Each flat's bill = its size in sq ft × this rate.</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">Late fine (₹, one-time, optional)</Label>
+          <Input type="number" inputMode="numeric" min="0" step="1" placeholder="e.g. 100 (leave empty for no fine)"
+            value={lateFine} onChange={(e) => setLateFine(e.target.value)} />
+          <p className="text-xs text-muted-foreground">
+            Added once if the bill is paid after the due date. You can waive it when marking a bill as paid.
+          </p>
         </div>
 
         <div className="space-y-2">

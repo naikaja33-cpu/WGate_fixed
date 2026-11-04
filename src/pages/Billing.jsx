@@ -10,7 +10,7 @@ import GenerateBillsModal from '@/components/billing/GenerateBillsModal';
 import FlatSizesModal from '@/components/billing/FlatSizesModal';
 import MarkPaidModal from '@/components/billing/MarkPaidModal';
 import StatCard from '@/components/dashboard/StatCard';
-import { formatSqft } from '@/lib/billing';
+import { formatSqft, effectiveStatus, amountDue } from '@/lib/billing';
 
 // Compact rupee amounts that keep their precision (2500 -> ₹2.5K, not ₹3k).
 const formatRupees = (amount) =>
@@ -47,7 +47,8 @@ export default function Billing() {
   );
   const myArea = !isAdmin ? areas[user?.flat_number] : null;
   // The rate used on the most recent bill, pre-filled next time.
-  const defaultRate = bills.find((b) => b.rate_per_sqft)?.rate_per_sqft;
+    const defaultRate = bills.find((b) => b.rate_per_sqft)?.rate_per_sqft;
+  const defaultLateFine = bills.find((b) => b.late_fine != null)?.late_fine;
 
   const generateMutation = useMutation({
     mutationFn: (records) => wgate.entities.MaintenanceBill.bulkCreate(records),
@@ -65,7 +66,7 @@ export default function Billing() {
     },
   });
 
-  const handleGenerate = ({ month, monthLabel, dueDate, rate, rows }) => {
+    const handleGenerate = ({ month, monthLabel, dueDate, rate, rows, lateFine }) => {
     const records = rows.map((r) => ({
       flat_number: r.flat,
       month,
@@ -75,6 +76,7 @@ export default function Billing() {
       line_items: r.lineItems,
       area_sqft: r.area,
       rate_per_sqft: rate,
+      late_fine: lateFine,
       status: 'pending',
     }));
     generateMutation.mutate(records);
@@ -84,11 +86,11 @@ export default function Billing() {
     updateMutation.mutate({ id: markingBill.id, data });
   };
 
-  const filtered = statusFilter === 'all' ? bills : bills.filter((b) => b.status === statusFilter);
+   const filtered = statusFilter === 'all' ? bills : bills.filter((b) => effectiveStatus(b) === statusFilter);
 
-  const totalCollected = bills.filter((b) => b.status === 'paid').reduce((s, b) => s + (b.amount || 0), 0);
-  const totalPending = bills.filter((b) => b.status === 'pending').reduce((s, b) => s + (b.amount || 0), 0);
-  const overdueCount = bills.filter((b) => b.status === 'overdue').length;
+  const totalCollected = bills.filter((b) => b.status === 'paid').reduce((s, b) => s + amountDue(b), 0);
+  const totalPending = bills.filter((b) => b.status !== 'paid').reduce((s, b) => s + amountDue(b), 0);
+  const overdueCount = bills.filter((b) => effectiveStatus(b) === 'overdue').length;
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
@@ -162,6 +164,7 @@ export default function Billing() {
           areas={areas}
           existingBills={bills}
           defaultRate={defaultRate}
+          defaultLateFine={defaultLateFine}
         />
       )}
 
