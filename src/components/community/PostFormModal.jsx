@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, Loader2, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { wgate } from '@/api/wgateClient';
+import { compressToJpeg } from '@/lib/imageTools';
 import { CATEGORIES, categoryOf } from '@/components/community/categories';
+
+const MAX_PHOTOS = 2;
+const FULL_PHOTO = { maxSide: 900, maxChars: 330000 }; // opened when a photo is tapped
+const THUMBNAIL = { maxSide: 320, maxChars: 60000 }; // shown in the list
 
 /**
  * Add or edit a forum post.
@@ -20,6 +26,56 @@ export default function PostFormModal({ post, defaultPhone, onSubmit, onClose })
   const [phone, setPhone] = useState(post ? post.contact_phone || '' : defaultPhone || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Photos: the list only carries thumbnails, so when editing, the full photos are loaded first.
+  const [photos, setPhotos] = useState([]);
+  const [thumbs, setThumbs] = useState(post?.thumbs || []);
+  const [photoStatus, setPhotoStatus] = useState(post?.thumbs?.length ? 'loading' : 'ready'); // loading | ready | failed
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (!post?.thumbs?.length) return undefined;
+    let cancelled = false;
+    wgate.entities.ClassifiedPost.get(post.id)
+      .then((full) => {
+        if (cancelled) return;
+        setPhotos(full.photos || []);
+        setThumbs(full.thumbs || []);
+        setPhotoStatus('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoStatus('failed');
+      });
+    return () => { cancelled = true; };
+  }, [post]);
+
+  const handlePickPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // lets the same photo be picked again
+    if (files.length === 0) return;
+    setError('');
+    setPhotoBusy(true);
+    try {
+      const nextPhotos = [...photos];
+      const nextThumbs = [...thumbs];
+      for (const file of files) {
+        if (nextPhotos.length >= MAX_PHOTOS) break;
+        nextPhotos.push(await compressToJpeg(file, FULL_PHOTO));
+        nextThumbs.push(await compressToJpeg(file, THUMBNAIL));
+      }
+      setPhotos(nextPhotos);
+      setThumbs(nextThumbs);
+    } catch (err) {
+      setError(err?.message || 'Could not add the photo.');
+    }
+    setPhotoBusy(false);
+  };
+
+  const removePhoto = (i) => {
+    setPhotos((prev) => prev.filter((_, idx) => idx !== i));
+    setThumbs((prev) => prev.filter((_, idx) => idx !== i));
+  };
 
   const handleSave = async () => {
     setError('');
@@ -44,6 +100,8 @@ export default function PostFormModal({ post, defaultPhone, onSubmit, onClose })
         description: description.trim(),
         price: price.trim() === '' ? null : Number(price),
         contact_phone: phone.trim(),
+        // If the existing photos could not be loaded, leave them as they are.
+        ...(photoStatus === 'ready' ? { photos, thumbs } : {}),
       });
     } catch (e) {
       setError(e?.message || 'Could not save your post. Please try again.');
@@ -90,6 +148,35 @@ export default function PostFormModal({ post, defaultPhone, onSubmit, onClose })
             onChange={(e) => setDescription(e.target.value)} />
         </div>
 
+        <div className="space-y-1.5">
+          <Label className="text-xs">Photos (optional, up to {MAX_PHOTOS})</Label>
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePickPhotos} />
+          <div className="flex gap-2 flex-wrap">
+            {thumbs.map((src, i) => (
+              <div key={i} className="relative">
+                <img src={src} alt={`Photo ${i + 1}`} className="w-20 h-20 rounded-xl object-cover border border-border" />
+                {photoStatus === 'ready' && (
+                  <button type="button" onClick={() => removePhoto(i)} aria-label={`Remove photo ${i + 1}`}
+                    className="absolute -top-1.5 -right-1.5 bg-destructive text-white rounded-full p-0.5">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {thumbs.length < MAX_PHOTOS && photoStatus === 'ready' && (
+              <Button type="button" variant="outline" className="w-20 h-20 rounded-xl flex-col gap-1 text-xs"
+                onClick={() => fileRef.current?.click()} disabled={photoBusy}>
+                {photoBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+                {photoBusy ? 'Adding' : 'Add'}
+              </Button>
+            )}
+          </div>
+          {photoStatus === 'loading' && <p className="text-xs text-muted-foreground">Loading your photos...</p>}
+          {photoStatus === 'failed' && (
+            <p className="text-xs text-amber-700">Could not load the existing photos. You can still edit the text; the photos stay as they are.</p>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">{categoryOf(category).priceLabel}</Label>
@@ -108,7 +195,7 @@ export default function PostFormModal({ post, defaultPhone, onSubmit, onClose })
 
         {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
 
-        <Button onClick={handleSave} disabled={saving} className="w-full">
+        <Button onClick={handleSave} disabled={saving || photoBusy || photoStatus === 'loading'} className="w-full">
           {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : post ? 'Save Changes' : 'Post'}
         </Button>
       </div>

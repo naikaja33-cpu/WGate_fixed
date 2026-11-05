@@ -841,7 +841,12 @@ const sseClients = new Map(); // res -> schemaName
 
 function broadcast(schemaName, entity, type, record) {
   if (sseClients.size === 0) return;
-  const data = entity === 'User' ? publicUser(record) : record;
+    let data = entity === 'User' ? publicUser(record) : record;
+  if (entity === 'ClassifiedPost') {
+    // Photos are large and the live event only makes screens reload, so leave them out.
+    const { photos, ...light } = record;
+    data = light;
+  }
   const payload = `data: ${JSON.stringify({ entity, type, id: record.id, data, timestamp: nowIso() })}\n\n`;
     for (const [client, info] of sseClients) {
     if (info.schema === schemaName && canRead(info.user, entity, record)) client.write(payload);
@@ -1995,10 +2000,25 @@ function cleanClassifiedFields(res, body, { partial }) {
       out.price = Math.round(price);
     }
   }
-  if (!partial || body.contact_phone !== undefined) {
+    if (!partial || body.contact_phone !== undefined) {
     const phone = String(body.contact_phone ?? '').trim();
     if (!isValidPhone(phone)) return bad('Enter a valid phone number, or leave it empty');
     out.contact_phone = phone;
+  }
+  // Photos: up to 2. Each has a full-size JPEG and a small thumbnail (data URLs from the app).
+  if (body.photos !== undefined || body.thumbs !== undefined) {
+    const photos = body.photos ?? [];
+    const thumbs = body.thumbs ?? [];
+    if (!Array.isArray(photos) || !Array.isArray(thumbs) || photos.length > 2 || photos.length !== thumbs.length) {
+      return bad('You can add up to 2 photos');
+    }
+    const isJpeg = (s, maxLength) =>
+      typeof s === 'string' && s.length <= maxLength && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(s);
+    if (!photos.every((s) => isJpeg(s, 450000)) || !thumbs.every((s) => isJpeg(s, 80000))) {
+      return bad('Photos must be JPEG images (each under about 300 KB)');
+    }
+    out.photos = photos;
+    out.thumbs = thumbs;
   }
   return out;
 }
@@ -2425,6 +2445,13 @@ entityRouter.get('/:name', wrap(async (req, res) => {
   const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
   const limit = parseInt(req.query.limit, 10);
   rows = rows.slice(skip, Number.isFinite(limit) && limit > 0 ? skip + limit : undefined);
+  if (entity === 'ClassifiedPost') {
+    // Lists carry only the small thumbnails; the full photos load when a post's photo is opened.
+    return res.json(rows.map((r) => {
+      const { photos, ...rest } = clean(entity, r);
+      return { ...rest, photo_count: Array.isArray(photos) ? photos.length : 0 };
+    }));
+  }
   res.json(rows.map((r) => clean(entity, r)));
 }));
 

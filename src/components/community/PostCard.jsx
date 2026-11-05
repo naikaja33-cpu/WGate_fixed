@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Phone, MessageCircle, Pencil, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
+import PhotoViewer from '@/components/community/PhotoViewer';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +12,8 @@ import { categoryOf } from '@/components/community/categories';
  *  - isAdmin: the society admin (can close/reopen and remove any post)
  */
 export default function PostCard({ post, isMine, isAdmin, onEdit, onToggleStatus, onDelete }) {
-  const cat = categoryOf(post.category);
+   const cat = categoryOf(post.category);
+  const [viewerIndex, setViewerIndex] = useState(null); // which photo is open full-screen
   const closed = post.status === 'closed';
   const digits = String(post.contact_phone || '').replace(/\D/g, '');
   // A 10-digit number is treated as an Indian mobile number for WhatsApp.
@@ -32,6 +35,16 @@ export default function PostCard({ post, isMine, isAdmin, onEdit, onToggleStatus
           </p>
         )}
       </div>
+
+            {post.thumbs?.length > 0 && (
+        <div className="flex gap-2">
+          {post.thumbs.map((src, i) => (
+            <button key={i} type="button" className="shrink-0" onClick={() => setViewerIndex(i)} aria-label={`View photo ${i + 1}`}>
+              <img src={src} alt="" className="w-20 h-20 rounded-xl object-cover border border-border" />
+            </button>
+          ))}
+        </div>
+      )}
 
       {post.description && (
         <p className="text-sm text-muted-foreground whitespace-pre-line break-words">{post.description}</p>
@@ -87,6 +100,10 @@ export default function PostCard({ post, isMine, isAdmin, onEdit, onToggleStatus
             <Trash2 className="w-4 h-4 mr-1" /> Remove post (admin)
           </Button>
         </div>
+      )}
+   
+      {viewerIndex !== null && (
+        <PhotoViewer post={post} startIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
       )}
     </div>
   );
