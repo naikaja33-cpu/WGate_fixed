@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass','FlatArea'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass','FlatArea','ClassifiedPost'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -120,6 +120,7 @@ const ENTITY_DEFAULTS = {
   AmenityBooking: { status: 'pending' },
   PreApproval: { status: 'active' },
   GatePass: { status: 'active' },
+  ClassifiedPost: { status: 'active' },
 };
 
 // Characters a gate pass code is built from — no 0/O or 1/I/L, so a guard
@@ -1602,7 +1603,7 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
 }));
 /* Super admin chooses which menu sections a society can use. Stored in that
    society's own SocietySettings record, which the app already reads. */
-const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing', 'Amenities', 'PreApprovals', 'GatePasses'];
+const MENU_KEYS = ['Visitors', 'ServiceTickets', 'NoticeBoard', 'Billing', 'Amenities', 'PreApprovals', 'GatePasses','Community'];
 
 // Which entity belongs to which menu section. A switched-off section is
 // blocked on the API too, not just hidden in the nav.
@@ -1617,6 +1618,7 @@ const MENU_FOR_ENTITY = {
   // menu entry needed, since pre-approvals are part of gate management.
   PreApproval: 'Visitors',
   GatePass: 'Visitors',
+  ClassifiedPost: 'Community',
 };
 const menuCache = new Map(); // schemaName -> { menus, expires }
 
@@ -1905,6 +1907,7 @@ function canRead(user, entity, record) {
     // Everyone in the society can see all bookings (not just their own) so
     // the booking form can show which slots are already taken.
     case 'AmenityBooking': return true;
+    case 'ClassifiedPost': return user.role === 'admin' || isPrimaryResident(user);
     case 'FlatArea': return user.role === 'admin' || (user.role !== 'family' && sameFlat(user, record));
     case 'Visitor': return isStaff(user) || sameFlat(user, record);
     // Guards need to see the list too, to recognize an expected daily
@@ -1919,6 +1922,9 @@ function canRead(user, entity, record) {
 }
 
 function canDelete(user, entity, record) {
+  if (entity === 'ClassifiedPost') {
+    return user.role === 'admin' || (isPrimaryResident(user) && !!record && sameEmail(user, record));
+  }
   if (entity === 'AmenityBooking' || entity === 'PreApproval' || entity === 'GatePass') {
     //return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
         return user.role === 'admin' || (isResident(user) && record && (sameEmail(user, record) || sameFlat(user, record)));
@@ -1933,6 +1939,50 @@ const denyWrite = (res, message = 'You do not have permission to do that') => {
 
 const pickDefined = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+/* Community forum: flats for rent or sale, household items, ads */
+const CLASSIFIED_CATEGORIES = ['flat_rent', 'flat_sale', 'items', 'ad'];
+const CLASSIFIED_MAX_ACTIVE_PER_PERSON = 10;
+
+// Checks the fields of a forum post. Returns the clean fields, or null after
+// sending a 400. With partial = true only the fields that were sent are checked.
+function cleanClassifiedFields(res, body, { partial }) {
+  const out = {};
+  const bad = (message) => {
+    res.status(400).json({ message });
+    return null;
+  };
+  if (!partial || body.category !== undefined) {
+    if (!CLASSIFIED_CATEGORIES.includes(body.category)) return bad('Choose what you are posting: rent, sale, household item or ad');
+    out.category = body.category;
+  }
+  if (!partial || body.title !== undefined) {
+    const title = String(body.title ?? '').trim();
+    if (!title) return bad('Title is required');
+    if (title.length > 100) return bad('Title can be at most 100 characters');
+    out.title = title;
+  }
+  if (!partial || body.description !== undefined) {
+    const description = String(body.description ?? '').trim();
+    if (description.length > 1000) return bad('Details can be at most 1000 characters');
+    out.description = description;
+  }
+  if (!partial || body.price !== undefined) {
+    if (body.price === '' || body.price === null || body.price === undefined) {
+      out.price = null;
+    } else {
+      const price = Number(body.price);
+      if (!Number.isFinite(price) || price < 0 || price > 1000000000) return bad('Price must be a number, or leave it empty');
+      out.price = Math.round(price);
+    }
+  }
+  if (!partial || body.contact_phone !== undefined) {
+    const phone = String(body.contact_phone ?? '').trim();
+    if (!isValidPhone(phone)) return bad('Enter a valid phone number, or leave it empty');
+    out.contact_phone = phone;
+  }
+  return out;
+}
 
 // Returns the record input to store (sanitized), or null after sending an
 // error response (403 for permission, 400/409 for bad/conflicting bookings).
@@ -1956,7 +2006,27 @@ async function authorizeCreate(req, res, entity, input) {
       res.status(409).json({ message: `Flat ${flat} already has a size. Edit it instead.` });
       return null;
     }
-    return { flat_number: flat, area_sqft: area };
+    return { flat_number: flat, area_sqft: area };    return { flat_number: flat, area_sqft: area };
+  }
+  if (entity === 'ClassifiedPost') {
+    if (!isPrimaryResident(user) && user.role !== 'admin') {
+      return denyWrite(res, 'Only owners, tenants and the admin can post here');
+    }
+    const fields = cleanClassifiedFields(res, body, { partial: false });
+    if (!fields) return null;
+    const existingPosts = await listEntity(req.schemaName, 'ClassifiedPost');
+    const myActive = existingPosts.filter((p) => p.status === 'active' && sameEmail(user, p));
+    if (myActive.length >= CLASSIFIED_MAX_ACTIVE_PER_PERSON) {
+      res.status(400).json({ message: `You already have ${CLASSIFIED_MAX_ACTIVE_PER_PERSON} open posts. Close one before adding another.` });
+      return null;
+    }
+    return {
+      ...fields,
+      status: 'active',
+      flat_number: user.flat_number || '',
+      resident_email: user.email,
+      resident_name: user.full_name || '',
+    };
   }
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
@@ -2145,7 +2215,25 @@ function authorizeUpdate(req, res, entity, record, patch) {
       res.status(400).json({ message: 'Area must be a number between 1 and 100000 sq ft' });
       return null;
     }
-    return { area_sqft: area };
+        return { area_sqft: area };
+  }
+  if (entity === 'ClassifiedPost') {
+    const isOwner = (isPrimaryResident(user) || user.role === 'admin') && sameEmail(user, record);
+    if (isOwner) {
+      const fields = cleanClassifiedFields(res, body, { partial: true });
+      if (!fields) return null;
+      if (body.status !== undefined) {
+        if (!['active', 'closed'].includes(body.status)) return denyWrite(res, 'Invalid status');
+        fields.status = body.status;
+      }
+      return fields;
+    }
+    if (user.role === 'admin') {
+      // Moderation only: the admin can close or reopen someone else's post, not rewrite it.
+      if (!['active', 'closed'].includes(body.status)) return denyWrite(res, 'Invalid status');
+      return { status: body.status };
+    }
+    return denyWrite(res);
   }
   if (WRITE_ROLES[entity]) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);

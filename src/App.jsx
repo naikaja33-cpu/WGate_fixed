@@ -16,6 +16,7 @@ import Billing from '@/pages/Billing';
 import ForceChangePassword from '@/pages/ForceChangePassword';
 import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
 import NoticeBoard from '@/pages/NoticeBoard';
+import Community from '@/pages/Community';
 import { NotificationProvider } from '@/components/notifications/NotificationProvider';
 import { Toaster as SonnerToaster } from 'sonner';
 import Signup from '@/pages/Signup';
@@ -79,6 +80,7 @@ const AuthenticatedApp = () => {
         <Route path="/ServiceTickets" element={<ServiceTickets />} />
         <Route path="/Billing" element={<Billing />} />
         <Route path="/NoticeBoard" element={<NoticeBoard />} />
+        <Route path="/Community" element={<Community />} />
         <Route path="/Profile" element={<Profile />} />
         <Route path="/Members" element={<Members />} />
         <Route path="/Amenities" element={<Amenities />} />

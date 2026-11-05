@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell,CalendarClock,UserCheck, KeyRound } from 'lucide-react';
+import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell,CalendarClock,UserCheck, KeyRound ,Store } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
@@ -8,6 +8,7 @@ import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
 const navItems = {
   admin: [
     { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
+    { path: '/Community', icon: Store, label: 'Community' },
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
@@ -19,6 +20,7 @@ const navItems = {
   ],
   tenant: [
     { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
+    { path: '/Community', icon: Store, label: 'Community' },
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
@@ -29,6 +31,7 @@ const navItems = {
   ],
   owner: [
     { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
+    { path: '/Community', icon: Store, label: 'Community' },
     { path: '/Visitors', icon: Users, label: 'Visitors' },
     { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
     { path: '/NoticeBoard', icon: Bell, label: 'Notices' },

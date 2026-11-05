@@ -562,6 +562,7 @@ const ALL_MENUS = [
   { key: 'Amenities', label: 'Amenities' },
   { key: 'PreApprovals', label: 'Pre-Approvals' },
   { key: 'GatePasses', label: 'Gate Pass' },
+  { key: 'Community', label: 'Community Forum' },
 ];
 // Keep in sync with PLAN_OPTIONS in server/wgate-server.mjs.
 const PLAN_OPTIONS = [

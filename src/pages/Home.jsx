@@ -53,7 +53,7 @@ export default function Home() {
           
 
           <form onSubmit={handleEnroll} className="mt-8 bg-card border border-border rounded-2xl p-5 space-y-3 max-w-md">
-            <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus/>
+            <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value.replace(/[^\p{L}\p{M}\s.'-]/gu, ''))} required autoFocus/>
             <Input
               type="tel"
               placeholder="Phone number"
