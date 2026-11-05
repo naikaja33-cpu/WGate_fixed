@@ -1818,7 +1818,26 @@ app.get('/api/flats', requireAuth, requireSocietySchema, wrap(async (req, res) =
       AND data->>'flat_number' <> ''
     ORDER BY flat_number
   `);
-  res.json(rows.map((r) => r.flat_number));
+   res.json(rows.map((r) => r.flat_number));
+}));
+
+/* Phone numbers of the residents of a flat, so the guard or admin can call or
+   WhatsApp them while a visitor waits at the gate. Only staff can ask, and only
+   for a flat that has a visitor waiting right now, so numbers are not handed out freely. */
+app.get('/api/flats/:flat/contacts', requireAuth, requireSocietySchema, wrap(async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'guard') {
+    return res.status(403).json({ message: 'Only the admin and security can do that' });
+  }
+  const flat = flatKey(req.params.flat);
+  if (!flat) return res.status(400).json({ message: 'Flat is required' });
+  const visitors = await listEntity(req.schemaName, 'Visitor');
+  const waiting = visitors.some((v) => v.status === 'pending' && flatKey(v.flat_number) === flat);
+  if (!waiting) return res.status(404).json({ message: 'No visitor is waiting for this flat' });
+  const users = await listEntity(req.schemaName, 'User');
+  const contacts = users
+    .filter((u) => !u.disabled && ['owner', 'tenant', 'family'].includes(u.role) && flatKey(u.flat_number) === flat && u.phone)
+    .map((u) => ({ name: u.full_name || '', role: u.role, phone: u.phone }));
+  res.json(contacts);
 }));
 
 /* ------------------------- realtime events ------------------------- */

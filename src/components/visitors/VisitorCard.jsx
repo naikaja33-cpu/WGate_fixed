@@ -3,6 +3,7 @@ import { Clock, Phone, Car, Check, X, LogOut as LogOutIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
+import ContactResident from '@/components/visitors/ContactResident';
 
 const statusStyles = {
   pending: 'bg-amber-100 text-amber-700 border-amber-200',
@@ -64,6 +65,10 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
           </span>
         )}
       </div>
+
+            {(role === 'guard' || role === 'admin') && visitor.status === 'pending' && (
+        <ContactResident visitor={visitor} />
+      )}
 
       {showActions && visitor.status === 'pending' && (
         <div className="flex gap-2 pt-1">

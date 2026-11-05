@@ -136,7 +136,11 @@ async forgotPassword(email, societyId) {
 const flats = {
   // Distinct resident flat numbers, for the check-in flat-number picker.
   async list() {
-    return request('/flats');
+        return request('/flats');
+  },
+  // Phone numbers of a flat's residents (admin and guard only, while a visitor is waiting).
+  async contacts(flat) {
+    return request(`/flats/${encodeURIComponent(flat)}/contacts`);
   },
 };
 const gatePass = {
