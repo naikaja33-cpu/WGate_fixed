@@ -343,7 +343,15 @@ async function initSchema() {
       expires_at TIMESTAMPTZ NOT NULL
     );
   `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
+  // Platform-wide settings (not tied to any society), e.g. the festival banner.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 }
 
 function rowToSociety(row) {
@@ -1023,8 +1031,59 @@ app.get('/api/public/societies', wrap(async (_req, res) => {
   res.json(
     societies
       .filter((s) => s.approved)
-      .map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats }))
+          .map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats }))
   );
+}));
+
+/* Festival / welcome banner: one platform-wide pop-up that the super admin controls.
+   Stored as a single row in platform_settings and shown to everyone when they open the app. */
+const ANNOUNCEMENT_THEMES = ['general', 'diwali', 'dussehra', 'newyear', 'holi', 'eid', 'christmas', 'national'];
+
+async function readAnnouncement() {
+  const { rows } = await pool.query(`SELECT value FROM platform_settings WHERE key = 'announcement'`);
+  return rows[0]?.value || null;
+}
+
+const announcementLimit = rateLimit({
+  windowMs: MINUTE, max: 120, keyFn: (req) => `announce:${clientIp(req)}`,
+  message: 'Too many requests. Please try again shortly.',
+});
+
+// Anyone, even before signing in, can read the banner while it is switched on and inside its dates.
+app.get('/api/public/announcement', announcementLimit, wrap(async (_req, res) => {
+  const a = await readAnnouncement();
+  const todayIst = new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10); // today's date in India
+  const live = a && a.enabled && (!a.start_date || a.start_date <= todayIst) && (!a.end_date || todayIst <= a.end_date);
+  if (!live) return res.json({ active: false });
+  res.json({ active: true, id: a.id, theme: a.theme, title: a.title, message: a.message });
+}));
+
+app.get('/api/superadmin/announcement', requireAuth, requireSuperadmin, wrap(async (_req, res) => {
+  res.json((await readAnnouncement()) || { enabled: false, theme: 'general', title: '', message: '', start_date: '', end_date: '' });
+}));
+
+app.put('/api/superadmin/announcement', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const body = req.body || {};
+  const enabled = body.enabled === true;
+  const theme = ANNOUNCEMENT_THEMES.includes(body.theme) ? body.theme : 'general';
+  const title = String(body.title ?? '').trim();
+  const message = String(body.message ?? '').trim();
+  const start_date = String(body.start_date ?? '').trim();
+  const end_date = String(body.end_date ?? '').trim();
+  const isDay = (s) => s === '' || (/^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s)));
+  if (enabled && !title) return res.status(400).json({ message: 'Enter a title for the banner' });
+  if (title.length > 60) return res.status(400).json({ message: 'The title can be at most 60 characters' });
+  if (message.length > 300) return res.status(400).json({ message: 'The message can be at most 300 characters' });
+  if (!isDay(start_date) || !isDay(end_date)) return res.status(400).json({ message: 'Dates must look like 2026-11-08' });
+  if (start_date && end_date && end_date < start_date) return res.status(400).json({ message: 'The end date is before the start date' });
+  // A new id on every save, so everyone sees an edited banner again.
+  const value = { enabled, theme, title, message, start_date, end_date, id: newId(), updated_at: nowIso() };
+  await pool.query(
+    `INSERT INTO platform_settings (key, value, updated_at) VALUES ('announcement', $1, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [JSON.stringify(value)]
+  );
+  res.json(value);
 }));
 
 /* Self-service signup. Creates the society and its first admin, but the

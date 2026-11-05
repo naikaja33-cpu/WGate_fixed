@@ -150,7 +150,13 @@ const gatePass = {
 };
 const superadmin = {
   async listSocieties() {
-    return request('/superadmin/societies');
+       return request('/superadmin/societies');
+  },
+  async getAnnouncement() {
+    return request('/superadmin/announcement');
+  },
+  async saveAnnouncement(data) {
+    return request('/superadmin/announcement', { method: 'PUT', body: data });
   },
   async createSociety(data) {
     return request('/superadmin/societies', { method: 'POST', body: data });
@@ -249,6 +255,10 @@ const publicApi = {
     async list() {
       return request('/public/societies');
     },
+  },
+  // The festival / welcome banner (no sign-in needed).
+  async announcement() {
+    return request('/public/announcement', { auth: false });
   },
 };
 

@@ -94,12 +94,12 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center gap-2">
+                <Link to="/Dashboard" className="flex items-center gap-2" aria-label="Go to home">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <Shield className="w-4 h-4 text-primary-foreground" />
           </div>
           <span className="font-semibold text-foreground text-lg">MySociety</span>
-        </div>
+        </Link>
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full capitalize">{role}</span>
           <NotificationBell />

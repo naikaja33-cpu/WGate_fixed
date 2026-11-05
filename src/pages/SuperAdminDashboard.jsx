@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
+import AnnouncementCard from '@/components/announcement/AnnouncementCard';
 
 // Mirrors the backend's GRACE_DAYS (server/wgate-server.mjs) — how many
 // extra days a society keeps working after its trial date passes before
@@ -199,7 +200,9 @@ export default function SuperAdminDashboard() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+          <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        <AnnouncementCard />
+
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Societies</h2>
           <Button size="sm" onClick={() => setShowAddSociety(true)}>
