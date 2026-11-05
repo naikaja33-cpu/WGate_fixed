@@ -1923,7 +1923,7 @@ function canRead(user, entity, record) {
 
 function canDelete(user, entity, record) {
   if (entity === 'ClassifiedPost') {
-    return user.role === 'admin' || (isPrimaryResident(user) && !!record && sameEmail(user, record));
+          return user.role === 'admin' || (isPrimaryResident(user) && !!record && sameEmail(user, record));
   }
   if (entity === 'AmenityBooking' || entity === 'PreApproval' || entity === 'GatePass') {
     //return user.role === 'admin' || (isResident(user) && record && sameEmail(user, record));
@@ -2228,11 +2228,12 @@ function authorizeUpdate(req, res, entity, record, patch) {
       }
       return fields;
     }
-    if (user.role === 'admin') {
-      // Moderation only: the admin can close or reopen someone else's post, not rewrite it.
-      if (!['active', 'closed'].includes(body.status)) return denyWrite(res, 'Invalid status');
-      return { status: body.status };
-    }
+    // Nobody else (admin and guard included) can change someone else's post.
+    // if (user.role === 'admin') {
+    //   // Moderation only: the admin can close or reopen someone else's post, not rewrite it.
+    //   if (!['active', 'closed'].includes(body.status)) return denyWrite(res, 'Invalid status');
+    //   return { status: body.status };
+    // }
     return denyWrite(res);
   }
   if (WRITE_ROLES[entity]) {

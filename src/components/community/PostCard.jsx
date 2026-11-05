@@ -61,7 +61,7 @@ export default function PostCard({ post, isMine, isAdmin, onEdit, onToggleStatus
         )
       )}
 
-      {(isMine || isAdmin) && (
+      {isMine && (
         <div className="flex gap-2 flex-wrap">
           {isMine && (
             <Button size="sm" variant="outline" onClick={() => onEdit(post)}>
@@ -76,6 +76,15 @@ export default function PostCard({ post, isMine, isAdmin, onEdit, onToggleStatus
           <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10"
             onClick={() => onDelete(post)}>
             <Trash2 className="w-4 h-4 mr-1" /> {isMine ? 'Delete' : 'Remove'}
+          </Button>
+        </div>
+            )}
+
+      {isAdmin && !isMine && (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => onDelete(post)}>
+            <Trash2 className="w-4 h-4 mr-1" /> Remove post (admin)
           </Button>
         </div>
       )}

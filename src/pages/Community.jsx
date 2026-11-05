@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
@@ -41,7 +42,7 @@ export default function Community() {
   const isMine = (p) => !!myEmail && String(p.resident_email || '').toLowerCase() === myEmail;
 
   // Everyone sees open posts; you also see your own closed ones, and the admin sees all.
-  const visible = posts.filter((p) => p.status !== 'closed' || isMine(p) || isAdmin);
+    const visible = posts.filter((p) => p.status !== 'closed' || isMine(p));
   const filtered = visible.filter((p) => {
     if (tab === 'all') return true;
     if (tab === 'mine') return isMine(p);
@@ -63,6 +64,9 @@ export default function Community() {
   const handleDelete = (post) => {
     if (window.confirm(`Delete "${post.title}"? This cannot be undone.`)) deleteMutation.mutate(post.id);
   };
+
+    // Guards and family members have no access to the forum.
+  if (!canPost) return <Navigate to="/Dashboard" replace />;
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
