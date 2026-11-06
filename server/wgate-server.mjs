@@ -109,7 +109,7 @@ async function sendEmail({ to, subject, html, text }) {
 
 
 
-const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass','FlatArea','ClassifiedPost'];
+const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass','FlatArea','ClassifiedPost','PaymentConfig'];
 
 const ENTITY_DEFAULTS = {
   User: { role: 'tenant' },
@@ -1683,6 +1683,7 @@ const MENU_FOR_ENTITY = {
   PreApproval: 'Visitors',
   GatePass: 'Visitors',
   ClassifiedPost: 'Community',
+  PaymentConfig: 'Billing',
 };
 const menuCache = new Map(); // schemaName -> { menus, expires }
 
@@ -1991,6 +1992,7 @@ function canRead(user, entity, record) {
     // the booking form can show which slots are already taken.
     case 'AmenityBooking': return true;
     case 'ClassifiedPost': return user.role === 'admin' || isPrimaryResident(user);
+    case 'PaymentConfig': return user.role === 'admin' || isPrimaryResident(user);
     case 'FlatArea': return user.role === 'admin' || (user.role !== 'family' && sameFlat(user, record));
     case 'Visitor': return isStaff(user) || sameFlat(user, record);
     // Guards need to see the list too, to recognize an expected daily
@@ -2082,6 +2084,21 @@ function cleanClassifiedFields(res, body, { partial }) {
   return out;
 }
 
+// The society's UPI ID (like mysociety@okhdfcbank) and the name shown on the payment screen.
+function cleanPaymentConfig(res, body) {
+  const upi = String(body.upi_id ?? '').trim();
+  const name = String(body.payee_name ?? '').trim();
+  if (!/^[a-zA-Z0-9.\-_]{2,100}@[a-zA-Z][a-zA-Z0-9]{1,63}$/.test(upi)) {
+    res.status(400).json({ message: 'Enter a valid UPI ID, like mysociety@okhdfcbank' });
+    return null;
+  }
+  if (!name || name.length > 60) {
+    res.status(400).json({ message: 'Enter the name to show on the payment screen (max 60 characters)' });
+    return null;
+  }
+  return { upi_id: upi, payee_name: name };
+}
+
 // Returns the record input to store (sanitized), or null after sending an
 // error response (403 for permission, 400/409 for bad/conflicting bookings).
 async function authorizeCreate(req, res, entity, input) {
@@ -2105,6 +2122,17 @@ async function authorizeCreate(req, res, entity, input) {
       return null;
     }
     return { flat_number: flat, area_sqft: area };    return { flat_number: flat, area_sqft: area };
+  }
+    if (entity === 'PaymentConfig') {
+    if (user.role !== 'admin') return denyWrite(res);
+    const fields = cleanPaymentConfig(res, body);
+    if (!fields) return null;
+    const existingConfig = await listEntity(req.schemaName, 'PaymentConfig');
+    if (existingConfig.length > 0) {
+      res.status(409).json({ message: 'Payment details are already set. Edit them instead.' });
+      return null;
+    }
+    return fields;
   }
   if (entity === 'ClassifiedPost') {
     if (!isPrimaryResident(user) && user.role !== 'admin') {
@@ -2303,7 +2331,7 @@ async function authorizeCreate(req, res, entity, input) {
 }
 
 // Returns the patch to apply (sanitized), or null after sending a 403.
-function authorizeUpdate(req, res, entity, record, patch) {
+async function authorizeUpdate(req, res, entity, record, patch) {
   const user = req.user;
   const body = patch && typeof patch === 'object' && !Array.isArray(patch) ? { ...patch } : {};
     if (entity === 'FlatArea') {
@@ -2314,6 +2342,45 @@ function authorizeUpdate(req, res, entity, record, patch) {
       return null;
     }
         return { area_sqft: area };
+  }
+   if (entity === 'PaymentConfig') {
+    if (user.role !== 'admin') return denyWrite(res);
+    return cleanPaymentConfig(res, body);
+  }
+  if (entity === 'MaintenanceBill' && user.role !== 'admin') {
+    // A member can only report that they paid. The admin confirms it and closes the bill.
+    if (!isPrimaryResident(user) || !sameFlat(user, record)) return denyWrite(res);
+    if (record.status === 'paid') {
+      res.status(400).json({ message: 'This bill is already paid' });
+      return null;
+    }
+    if (record.payment_claim) {
+      res.status(400).json({ message: 'Your payment is already submitted and waiting for the admin to confirm' });
+      return null;
+    }
+    const utr = String(body.payment_claim?.utr ?? '').replace(/\s+/g, '').toUpperCase();
+    if (!/^[A-Z0-9]{8,30}$/.test(utr)) {
+      res.status(400).json({ message: 'Enter the UPI transaction ID (UTR) from your payment app' });
+      return null;
+    }
+    // One payment cannot be used to close two different bills.
+    const allBills = await listEntity(req.schemaName, 'MaintenanceBill');
+    const reused = allBills.some((b) =>
+      b.id !== record.id &&
+      ((b.payment_claim?.utr || '').toUpperCase() === utr || String(b.transaction_id || '').toUpperCase() === utr)
+    );
+    if (reused) {
+      res.status(400).json({ message: 'This transaction ID has already been used for another bill' });
+      return null;
+    }
+    return {
+      payment_claim: {
+        utr,
+        claimed_by: user.full_name || user.email,
+        claimed_email: user.email,
+        claimed_at: nowIso(),
+      },
+    };
   }
   if (entity === 'ClassifiedPost') {
     const isOwner = (isPrimaryResident(user) || user.role === 'admin') && sameEmail(user, record);
@@ -2434,7 +2501,7 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
       if (!canDelete(req.user, entity, record)) return denyWrite(res, 'You do not have permission to delete this');
       return next();
     }
-    const patch = authorizeUpdate(req, res, entity, record, req.body);
+        const patch = await authorizeUpdate(req, res, entity, record, req.body);
     if (!patch) return;
     req.body = patch;
   }

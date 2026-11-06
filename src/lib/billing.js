@@ -5,6 +5,19 @@ export const formatSqft = (n) =>
 
 export const formatMoney = (n) => Number(n || 0).toLocaleString('en-IN');
 
+// A UPI payment link. On a phone it opens GPay, PhonePe, Paytm or whichever UPI app is chosen,
+// with the payee, amount and note already filled in.
+export function buildUpiLink({ upiId, payeeName, amount, note }) {
+  const parts = [
+    `pa=${encodeURIComponent(upiId)}`,
+    `pn=${encodeURIComponent(payeeName)}`,
+    `am=${Number(amount).toFixed(2)}`,
+    'cu=INR',
+    `tn=${encodeURIComponent(String(note || '').slice(0, 60))}`,
+  ];
+  return `upi://pay?${parts.join('&')}`;
+}
+
 // ---- Late fine: a flat fee added once when a bill is paid after its due date (no grace days) ----
 
 // Today as 'yyyy-MM-dd' in the viewer's own time zone.

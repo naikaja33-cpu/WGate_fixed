@@ -10,7 +10,7 @@ import { fineForPayment } from '@/lib/billing';
 export default function MarkPaidModal({ bill, onConfirm, onClose, isLoading }) {
   const [paidDate, setPaidDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [paymentMode, setPaymentMode] = useState('upi');
-    const [transactionId, setTransactionId] = useState('');
+  const [transactionId, setTransactionId] = useState(bill.payment_claim?.utr || '');
   const [waiveFine, setWaiveFine] = useState(false);
   const lateFine = fineForPayment(bill, paidDate); // 0 when paid on or before the due date
   const fine = waiveFine ? 0 : lateFine;

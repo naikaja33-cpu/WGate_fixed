@@ -354,7 +354,7 @@ function makeEntityClient(entityName) {
 
 // Matches the backend's ENTITIES list exactly (Society is managed
 // separately via wgate.superadmin.*, not through the generic entity API).
-export const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval','GatePass','FlatArea','ClassifiedPost'];
+export const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice','AmenityBooking','PreApproval','GatePass','FlatArea','ClassifiedPost','PaymentConfig'];
 
 const entities = Object.fromEntries(ENTITY_NAMES.map((name) => [name, makeEntityClient(name)]));
 

@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2, Ruler } from 'lucide-react';
+import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2, Ruler ,Landmark} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BillCard from '@/components/billing/BillCard';
 import GenerateBillsModal from '@/components/billing/GenerateBillsModal';
 import FlatSizesModal from '@/components/billing/FlatSizesModal';
 import MarkPaidModal from '@/components/billing/MarkPaidModal';
+import PayBillModal from '@/components/billing/PayBillModal';
+import PaymentSettingsModal from '@/components/billing/PaymentSettingsModal';
 import StatCard from '@/components/dashboard/StatCard';
 import { formatSqft, effectiveStatus, amountDue } from '@/lib/billing';
 
@@ -21,7 +23,9 @@ export default function Billing() {
   const isAdmin = user?.role === 'admin';
   const [showGenerate, setShowGenerate] = useState(false);
   const [showSizes, setShowSizes] = useState(false);
-  const [markingBill, setMarkingBill] = useState(null);
+    const [markingBill, setMarkingBill] = useState(null);
+  const [payingBill, setPayingBill] = useState(null); // a member paying a bill
+  const [showPaySettings, setShowPaySettings] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const queryClient = useQueryClient();
 
@@ -45,7 +49,14 @@ export default function Billing() {
     () => Object.fromEntries(areaRecords.map((r) => [r.flat_number, r.area_sqft])),
     [areaRecords]
   );
-  const myArea = !isAdmin ? areas[user?.flat_number] : null;
+    const myArea = !isAdmin ? areas[user?.flat_number] : null;
+
+  // The society's UPI ID, set by the admin. Without it members cannot pay online.
+  const { data: payConfigs = [] } = useQuery({
+    queryKey: ['payment-config'],
+    queryFn: () => wgate.entities.PaymentConfig.list('-created_date', 1),
+  });
+  const payConfig = payConfigs[0] || null;
   // The rate used on the most recent bill, pre-filled next time.
     const defaultRate = bills.find((b) => b.rate_per_sqft)?.rate_per_sqft;
   const defaultLateFine = bills.find((b) => b.late_fine != null)?.late_fine;
@@ -82,8 +93,25 @@ export default function Billing() {
     generateMutation.mutate(records);
   };
 
-  const handleMarkPaid = (data) => {
+   const handleMarkPaid = (data) => {
     updateMutation.mutate({ id: markingBill.id, data });
+  };
+
+  // A member reports their payment (the admin confirms it later).
+  const claimMutation = useMutation({
+    mutationFn: ({ id, utr }) => wgate.entities.MaintenanceBill.update(id, { payment_claim: { utr } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bills'] }),
+  });
+  const handleClaim = async (utr) => {
+    await claimMutation.mutateAsync({ id: payingBill.id, utr });
+    setPayingBill(null);
+  };
+
+  // The admin could not find the payment: clear the report so the member can try again.
+  const handleRejectClaim = (bill) => {
+    if (window.confirm(`Mark the payment ${bill.payment_claim?.utr || ''} as not received? The member can submit again.`)) {
+      updateMutation.mutate({ id: bill.id, data: { payment_claim: null, claim_rejected: true } });
+    }
   };
 
    const filtered = statusFilter === 'all' ? bills : bills.filter((b) => effectiveStatus(b) === statusFilter);
@@ -124,6 +152,23 @@ export default function Billing() {
         </div>
       )}
 
+           {isAdmin && (
+        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Landmark className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">Online payment</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {payConfig ? `Members pay to ${payConfig.upi_id}` : 'Not set up. Add your society UPI ID so members can pay from GPay or PhonePe.'}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowPaySettings(true)}>
+            {payConfig ? 'Edit' : 'Set up'}
+          </Button>
+        </div>
+      )}
+
       {isAdmin && (
         <div className="grid grid-cols-2 gap-3">
           <StatCard title="Collected" value={formatRupees(totalCollected)} icon={TrendingUp} color="bg-emerald-100 text-emerald-600" />
@@ -151,7 +196,8 @@ export default function Billing() {
       ) : (
         <div className="space-y-3">
           {filtered.map((bill) => (
-            <BillCard key={bill.id} bill={bill} isAdmin={isAdmin} onMarkPaid={setMarkingBill} />
+            <BillCard key={bill.id} bill={bill} isAdmin={isAdmin} onMarkPaid={setMarkingBill}
+              payEnabled={!!payConfig} onPay={setPayingBill} onRejectClaim={handleRejectClaim} />
           ))}
         </div>
       )}
@@ -175,6 +221,26 @@ export default function Billing() {
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ['flat-areas'] });
             setShowSizes(false);
+          }}
+        />
+      )}
+
+            {payingBill && payConfig && (
+        <PayBillModal
+          bill={payingBill}
+          config={payConfig}
+          onSubmit={handleClaim}
+          onClose={() => setPayingBill(null)}
+        />
+      )}
+
+      {showPaySettings && (
+        <PaymentSettingsModal
+          config={payConfig}
+          onClose={() => setShowPaySettings(false)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ['payment-config'] });
+            setShowPaySettings(false);
           }}
         />
       )}

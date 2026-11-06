@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, CheckCircle2, Clock, IndianRupee } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, IndianRupee,Smartphone } from 'lucide-react';
 import { format } from 'date-fns';
 import { effectiveStatus, lateFineFor } from '@/lib/billing';
 
@@ -10,7 +10,7 @@ const statusStyles = {
   overdue: 'bg-red-100 text-red-700 border-red-200',
 };
 
-export default function BillCard({ bill, onMarkPaid, isAdmin }) {
+export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay, onRejectClaim }) {
   const status = effectiveStatus(bill);
   const fine = lateFineFor(bill);
   const fineConfigured = Math.round(Number(bill.late_fine) || 0);
@@ -83,7 +83,46 @@ export default function BillCard({ bill, onMarkPaid, isAdmin }) {
         )}
       </div>
 
-      {isAdmin && bill.status !== 'paid' && (
+            {!isAdmin && bill.status !== 'paid' && (
+        bill.payment_claim ? (
+          <p className="text-xs rounded-xl bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2">
+            Payment submitted (ID {bill.payment_claim.utr}). It will be marked paid once the admin confirms it.
+          </p>
+        ) : (
+          <>
+            {bill.claim_rejected && (
+              <p className="text-xs text-red-600">
+                Your last payment could not be verified. Please check the transaction ID and submit again.
+              </p>
+            )}
+            {payEnabled && (
+              <Button size="sm" className="w-full" onClick={() => onPay(bill)}>
+                <Smartphone className="w-4 h-4 mr-1" /> Pay ₹{(Number(bill.amount) + fine).toLocaleString('en-IN')}
+              </Button>
+            )}
+          </>
+        )
+      )}
+
+      {isAdmin && bill.status !== 'paid' && bill.payment_claim && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2">
+          <p className="text-xs text-blue-800">
+            <strong>{bill.payment_claim.claimed_by || 'A resident'}</strong> says they paid. Transaction ID:{' '}
+            <span className="font-mono">{bill.payment_claim.utr}</span>. Check this ID in your bank or UPI statement before confirming.
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => onMarkPaid(bill)}>
+              Confirm and close
+            </Button>
+            <Button size="sm" variant="outline" className="flex-1 border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => onRejectClaim(bill)}>
+              Not received
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && bill.status !== 'paid' && !bill.payment_claim && (
         <Button size="sm" variant="outline" className="w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
           onClick={() => onMarkPaid(bill)}>
           <CheckCircle2 className="w-4 h-4 mr-1" /> Mark as Paid
