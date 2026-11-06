@@ -37,10 +37,16 @@ export const AuthProvider = ({ children }) => {
     await checkUserAuth();
   }, [checkUserAuth]);
 
-  useEffect(() => {
+   useEffect(() => {
     checkAppState();
   }, [checkAppState]);
 
+  // The server refused a request because this flat's bill is overdue: show the restricted screen.
+  useEffect(() => {
+    const onOverdue = () => setUser((u) => (u && !u.dues_blocked ? { ...u, dues_blocked: true } : u));
+    window.addEventListener('wgate:dues-overdue', onOverdue);
+    return () => window.removeEventListener('wgate:dues-overdue', onOverdue);
+  }, []);
   const login = async (email, password, societyId) => {
     setAuthError(null);
     const loggedInUser = await wgate.auth.login(email, password, societyId);

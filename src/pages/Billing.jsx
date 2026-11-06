@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2, Ruler ,Landmark} from 'lucide-react';
+import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2, Ruler, Landmark, Mail, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BillCard from '@/components/billing/BillCard';
@@ -56,7 +57,26 @@ export default function Billing() {
     queryKey: ['payment-config'],
     queryFn: () => wgate.entities.PaymentConfig.list('-created_date', 1),
   });
-  const payConfig = payConfigs[0] || null;
+    const payConfig = payConfigs[0] || null;
+  // Days after the due date before a flat is locked out of the app (0 = off).
+  const restrictDays = Number.isInteger(payConfig?.restrict_after_days) ? payConfig.restrict_after_days : 0;
+
+  // Admin only: each flat's tenant (or owner) phone number, for the WhatsApp reminder.
+  const { data: residents = [] } = useQuery({
+    queryKey: ['bill-residents'],
+    queryFn: () => wgate.entities.User.list('-created_date', 1000),
+    enabled: isAdmin,
+  });
+  const residentByFlat = useMemo(() => {
+    const map = {};
+    for (const u of residents) {
+      if (u.disabled || !u.phone || !['owner', 'tenant'].includes(u.role)) continue;
+      const k = String(u.flat_number ?? '').trim().toLowerCase();
+      if (!map[k] || u.role === 'tenant') map[k] = { phone: u.phone, name: u.full_name };
+    }
+    return map;
+  }, [residents]);
+  const [sendingEmails, setSendingEmails] = useState(false);
   // The rate used on the most recent bill, pre-filled next time.
     const defaultRate = bills.find((b) => b.rate_per_sqft)?.rate_per_sqft;
   const defaultLateFine = bills.find((b) => b.late_fine != null)?.late_fine;
@@ -114,7 +134,36 @@ export default function Billing() {
     }
   };
 
-   const filtered = statusFilter === 'all' ? bills : bills.filter((b) => effectiveStatus(b) === statusFilter);
+  // Remember when the admin last sent a WhatsApp reminder.
+  const handleReminded = (bill) => {
+    updateMutation.mutate({ id: bill.id, data: { last_reminded_at: new Date().toISOString() } });
+  };
+
+  // Let a locked-out flat keep using the app for this bill (or lock it again).
+  const handleToggleWaive = (bill) => {
+    updateMutation.mutate({ id: bill.id, data: { restriction_waived: !bill.restriction_waived } });
+  };
+
+  const handleEmailReminders = async () => {
+    if (!window.confirm('Email a reminder to every flat with an overdue bill? A flat is reminded at most once a day.')) return;
+    setSendingEmails(true);
+    try {
+      const r = await wgate.billing.remindEmail();
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      const parts = [];
+      if (r.sent) parts.push(`Reminder sent to ${r.sent} flat(s).`);
+      if (r.no_email) parts.push(`${r.no_email} flat(s) have no email address.`);
+      if (r.failed) parts.push(`${r.failed} could not be sent.`);
+      if (r.remaining) parts.push(`${r.remaining} more are waiting. Tap again to send them.`);
+      toast.success(parts.length ? parts.join(' ') : 'No flat needs a reminder right now.');
+    } catch (e) {
+      toast.error(e?.message || 'Could not send reminders. Please try again.');
+    } finally {
+      setSendingEmails(false);
+    }
+  };
+
+  const filtered = statusFilter === 'all' ? bills : bills.filter((b) => effectiveStatus(b) === statusFilter);
 
   const totalCollected = bills.filter((b) => b.status === 'paid').reduce((s, b) => s + amountDue(b), 0);
   const totalPending = bills.filter((b) => b.status !== 'paid').reduce((s, b) => s + amountDue(b), 0);
@@ -164,7 +213,26 @@ export default function Billing() {
             </p>
           </div>
           <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowPaySettings(true)}>
-            {payConfig ? 'Edit' : 'Set up'}
+                        {payConfig ? 'Edit' : 'Set up'}
+          </Button>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Mail className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">Payment reminders</p>
+            <p className="text-xs text-muted-foreground">
+              {restrictDays > 0
+                ? `Email all overdue flats at once, or tap Remind on WhatsApp on a bill. Flats are locked out of the app ${restrictDays} days after the due date.`
+                : 'Email all overdue flats at once, or tap Remind on WhatsApp on a bill. The app lock is off (set the days in Online payment).'}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" className="rounded-xl" onClick={handleEmailReminders} disabled={sendingEmails}>
+            {sendingEmails ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Email all'}
           </Button>
         </div>
       )}
@@ -196,8 +264,11 @@ export default function Billing() {
       ) : (
         <div className="space-y-3">
           {filtered.map((bill) => (
-            <BillCard key={bill.id} bill={bill} isAdmin={isAdmin} onMarkPaid={setMarkingBill}
-              payEnabled={!!payConfig} onPay={setPayingBill} onRejectClaim={handleRejectClaim} />
+                        <BillCard key={bill.id} bill={bill} isAdmin={isAdmin} onMarkPaid={setMarkingBill}
+              payEnabled={!!payConfig} onPay={setPayingBill} onRejectClaim={handleRejectClaim}
+              restrictDays={restrictDays}
+              resident={residentByFlat[String(bill.flat_number ?? '').trim().toLowerCase()]}
+              onReminded={handleReminded} onToggleWaive={handleToggleWaive} />
           ))}
         </div>
       )}

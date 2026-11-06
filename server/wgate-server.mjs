@@ -808,6 +808,44 @@ function bearerToken(req) {
   return null;
 }
 
+/* ---- Overdue dues: a flat far behind on maintenance can only use Billing ---- */
+
+const DUES_CACHE_MS = 60 * 1000;
+const duesCache = new Map(); // schemaName -> { at, flats }
+
+// Flats with an unpaid bill that is more than N days past its due date
+// (N = "restrict_after_days" in the payment settings; 0 or missing = off).
+// A bill is ignored once the member has reported a payment, or the admin allowed access.
+async function overdueFlats(schemaName) {
+  const hit = duesCache.get(schemaName);
+  if (hit && Date.now() - hit.at < DUES_CACHE_MS) return hit.flats;
+  const flats = new Set();
+  const [config] = await listEntity(schemaName, 'PaymentConfig');
+  const days = Number.isInteger(config?.restrict_after_days) ? config.restrict_after_days : 0;
+  if (config && days > 0) {
+    // Dates are in Indian time.
+    const cutoff = new Date(Date.now() + 5.5 * 3600000 - days * 86400000).toISOString().slice(0, 10);
+    const bills = await listEntity(schemaName, 'MaintenanceBill');
+    for (const b of bills) {
+            if (b.status === 'paid' || b.restriction_waived) continue;
+                  // if (b.status === 'paid' || b.restriction_waived || b.payment_claim) continue;
+      const due = b.due_date ? String(b.due_date).slice(0, 10) : '';
+      if (due && due < cutoff) flats.add(flatKey(b.flat_number));
+    }
+  }
+  duesCache.set(schemaName, { at: Date.now(), flats });
+  return flats;
+}
+
+async function duesBlocked(schemaName, user) {
+  if (!schemaName || !user?.flat_number) return false;
+  if (!['owner', 'tenant', 'family'].includes(user.role)) return false; // admin and guard are never locked
+  return (await overdueFlats(schemaName)).has(flatKey(user.flat_number));
+}
+
+// What a locked flat can still reach: sign-in/out, its bills, the UPI details and flat size.
+const DUES_ALLOWED = /^\/api\/(auth\/|entities\/(MaintenanceBill|PaymentConfig|FlatArea|SocietySettings)(\/|\?|$))/;
+
 async function requireAuth(req, res, next) {
   try {
     const resolved = await resolveSession(bearerToken(req));
@@ -819,7 +857,13 @@ async function requireAuth(req, res, next) {
     req.user = resolved.user;
     req.session = resolved.session;
     req.society = resolved.society;
-    req.schemaName = resolved.schemaName;
+        req.schemaName = resolved.schemaName;
+    if (!DUES_ALLOWED.test(req.originalUrl) && (await duesBlocked(req.schemaName, req.user))) {
+      return res.status(403).json({
+        code: 'dues_overdue',
+        message: 'Your maintenance bill is overdue. Please pay it to continue using the app.',
+      });
+    }
     next();
   } catch (err) {
     next(err);
@@ -848,6 +892,7 @@ function requireSocietySchema(req, res, next) {
 const sseClients = new Map(); // res -> schemaName
 
 function broadcast(schemaName, entity, type, record) {
+  if (entity === 'MaintenanceBill' || entity === 'PaymentConfig') duesCache.delete(schemaName);
   if (sseClients.size === 0) return;
     let data = entity === 'User' ? publicUser(record) : record;
   if (entity === 'ClassifiedPost') {
@@ -1183,7 +1228,11 @@ app.post('/api/auth/login', loginIpLimit, wrap(async (req, res) => {
   const token = await createSession(user.id, requestedSocietyId);
   // Lets the app show a "trial ends in N days" / "in grace period" banner
   // without a separate request — included on every successful login.
-  res.json({ token, user: publicUser(user), society_status: trialStatusFor(society) });
+  res.json({
+    token,
+    user: { ...publicUser(user), dues_blocked: await duesBlocked(schemaName, user) },
+    society_status: trialStatusFor(society),
+  });
 }));
 
 app.post('/api/auth/logout', wrap(async (req, res) => {
@@ -1194,12 +1243,13 @@ app.post('/api/auth/logout', wrap(async (req, res) => {
   res.json({ success: true });
 }));
 
-app.get('/api/auth/me', requireAuth, (req, res) => {
+app.get('/api/auth/me', requireAuth, wrap(async (req, res) => {
   res.json({
     ...publicUser(req.user),
+    dues_blocked: await duesBlocked(req.schemaName, req.user),
     society_status: req.society ? trialStatusFor(req.society) : undefined,
   });
-});
+}));
 
 app.patch('/api/auth/me', requireAuth, wrap(async (req, res) => {
   if (!req.schemaName) {
@@ -1905,6 +1955,81 @@ app.get('/api/flats/:flat/contacts', requireAuth, requireSocietySchema, wrap(asy
   res.json(contacts);
 }));
 
+/* ------------------------- payment reminders ------------------------- */
+
+const remindLimit = rateLimit({
+  windowMs: HOUR, max: 6, keyFn: (req) => `remind:${req.user?.id || clientIp(req)}`,
+  message: 'You have sent reminders several times already. Please try again in a while.',
+});
+
+// Admin: emails the tenant (or the owner, when there is no tenant) of every flat with an overdue bill.
+// A flat is reminded at most once a day. Up to 25 flats are sent per tap, so each request stays short.
+app.post('/api/billing/remind-email', requireAuth, requireAdmin, requireSocietySchema, remindLimit, wrap(async (req, res) => {
+  const today = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+  const recently = Date.now() - 20 * 3600000;
+  const [bills, users] = await Promise.all([
+    listEntity(req.schemaName, 'MaintenanceBill'),
+    listEntity(req.schemaName, 'User'),
+  ]);
+
+  const byFlat = new Map();
+  for (const b of bills) {
+    if (b.status === 'paid' || b.payment_claim) continue;
+    const due = b.due_date ? String(b.due_date).slice(0, 10) : '';
+    if (!(due && due < today)) continue; // only overdue bills
+    if (b.last_reminded_at && Date.parse(b.last_reminded_at) > recently) continue;
+    const key = flatKey(b.flat_number);
+    if (!key) continue;
+    if (!byFlat.has(key)) byFlat.set(key, []);
+    byFlat.get(key).push(b);
+  }
+
+  let noEmail = 0;
+  const targets = [];
+  for (const [key, flatBills] of byFlat) {
+    const residents = users.filter((u) => !u.disabled && isPrimaryResident(u) && u.email && flatKey(u.flat_number) === key);
+    const tenants = residents.filter((u) => u.role === 'tenant');
+    const to = (tenants.length ? tenants : residents).map((u) => u.email);
+    if (to.length === 0) noEmail += 1;
+    else targets.push({ to, flatBills, flat: flatBills[0].flat_number });
+  }
+
+  const batch = targets.slice(0, 25);
+  const link = APP_URL ? `${APP_URL}/#/Billing` : '';
+  const societyName = req.society?.name || 'your society';
+  let sent = 0;
+  let failed = 0;
+
+  const remindFlat = async ({ to, flatBills, flat }) => {
+    const rows = flatBills.map((b) => {
+      const total = Math.round(Number(b.amount) || 0) + Math.round(Number(b.late_fine) || 0);
+      return { label: b.month_label || b.month || 'Maintenance', total };
+    });
+    const textLines = rows.map((r) => `- ${r.label}: Rs ${r.total.toLocaleString('en-IN')}`);
+    const htmlLines = rows.map((r) => `<li>${escapeHtml(r.label)}: <strong>&#8377;${r.total.toLocaleString('en-IN')}</strong></li>`);
+    const subject = `Maintenance payment reminder - Flat ${flat}`;
+    const html = `<p>Hello,</p><p>This is a reminder from ${escapeHtml(societyName)}. The maintenance bill for Flat ${escapeHtml(flat)} is overdue (late fine included where it applies):</p><ul>${htmlLines.join('')}</ul>` +
+      (link ? `<p><a href="${link}">Open WGate and pay</a> with GPay, PhonePe or any UPI app.</p>` : '<p>Please open WGate and pay with GPay, PhonePe or any UPI app.</p>') +
+      '<p>Thank you.</p>';
+    const text = `Hello,\n\nThis is a reminder from ${societyName}. The maintenance bill for Flat ${flat} is overdue:\n${textLines.join('\n')}\n\n` +
+      (link ? `Pay here: ${link}\n\n` : 'Please open WGate and pay.\n\n') + 'Thank you.';
+    const results = await Promise.all(to.map((addr) => sendEmail({ to: addr, subject, html, text })));
+    if (!results.some((r) => r.ok)) { failed += 1; return; }
+    sent += 1;
+    for (const b of flatBills) {
+      const stamp = nowIso();
+      const updated = { ...b, last_reminded_at: stamp, updated_date: stamp };
+      await updateEntityRecord(req.schemaName, 'MaintenanceBill', b.id, updated);
+      broadcast(req.schemaName, 'MaintenanceBill', 'update', updated);
+    }
+  };
+
+  for (let i = 0; i < batch.length; i += 5) {
+    await Promise.all(batch.slice(i, i + 5).map(remindFlat));
+  }
+  res.json({ sent, failed, no_email: noEmail, remaining: Math.max(0, targets.length - batch.length) });
+}));
+
 /* ------------------------- realtime events ------------------------- */
 
 app.get('/api/events', requireAuth, requireSocietySchema, (req, res) => {
@@ -2096,7 +2221,13 @@ function cleanPaymentConfig(res, body) {
     res.status(400).json({ message: 'Enter the name to show on the payment screen (max 60 characters)' });
     return null;
   }
-  return { upi_id: upi, payee_name: name };
+    // Days after the due date before a member is restricted. 0 switches the lock off.
+  const rawDays = body.restrict_after_days === undefined || body.restrict_after_days === '' ? 30 : Number(body.restrict_after_days);
+  if (!Number.isInteger(rawDays) || rawDays < 0 || rawDays > 365) {
+    res.status(400).json({ message: 'Days before access is paused must be a whole number from 0 to 365 (0 = never)' });
+    return null;
+  }
+  return { upi_id: upi, payee_name: name, restrict_after_days: rawDays };
 }
 
 // Returns the record input to store (sanitized), or null after sending an

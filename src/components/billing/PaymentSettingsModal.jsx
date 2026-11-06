@@ -8,12 +8,14 @@ import { wgate } from '@/api/wgateClient';
 const UPI_PATTERN = /^[a-zA-Z0-9.\-_]{2,100}@[a-zA-Z][a-zA-Z0-9]{1,63}$/;
 
 /**
- * Admin: the society's UPI ID. Members pay to this ID from GPay, PhonePe, Paytm or any UPI app.
+ * Admin: the society's UPI ID and the overdue rule.
  *  - config: the saved record, or null the first time
  */
 export default function PaymentSettingsModal({ config, onClose, onSaved }) {
   const [upiId, setUpiId] = useState(config?.upi_id || '');
   const [payeeName, setPayeeName] = useState(config?.payee_name || '');
+  // New setup starts at 30 days. A society that set up UPI earlier starts at 0 (off) until the admin chooses.
+  const [restrictDays, setRestrictDays] = useState(String(config?.restrict_after_days ?? (config ? 0 : 30)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -21,6 +23,7 @@ export default function PaymentSettingsModal({ config, onClose, onSaved }) {
     setError('');
     const id = upiId.trim();
     const name = payeeName.trim();
+    const days = Number(restrictDays);
     if (!UPI_PATTERN.test(id)) {
       setError('Enter a valid UPI ID, like mysociety@okhdfcbank');
       return;
@@ -29,10 +32,15 @@ export default function PaymentSettingsModal({ config, onClose, onSaved }) {
       setError('Enter the society name to show on the payment screen (max 60 characters).');
       return;
     }
+    if (!Number.isInteger(days) || days < 0 || days > 365) {
+      setError('Enter a whole number of days from 0 to 365. Use 0 to switch the lock off.');
+      return;
+    }
     setSaving(true);
     try {
-      if (config) await wgate.entities.PaymentConfig.update(config.id, { upi_id: id, payee_name: name });
-      else await wgate.entities.PaymentConfig.create({ upi_id: id, payee_name: name });
+      const data = { upi_id: id, payee_name: name, restrict_after_days: days };
+      if (config) await wgate.entities.PaymentConfig.update(config.id, data);
+      else await wgate.entities.PaymentConfig.create(data);
       onSaved();
     } catch (e) {
       setError(e?.message || 'Could not save. Please try again.');
@@ -62,6 +70,14 @@ export default function PaymentSettingsModal({ config, onClose, onSaved }) {
           <Label className="text-xs">Name shown on the payment screen</Label>
           <Input value={payeeName} maxLength={60} placeholder="e.g. Green Valley Residents Association"
             onChange={(e) => setPayeeName(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Pause app access when a bill is overdue by more than (days)</Label>
+          <Input type="number" inputMode="numeric" min={0} max={365} value={restrictDays}
+            onChange={(e) => setRestrictDays(e.target.value)} />
+          <p className="text-xs text-muted-foreground">
+            30 = one month. After that, the flat can only open the Billing screen until the bill is paid. Enter 0 to never pause access.
+          </p>
         </div>
 
         <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1">

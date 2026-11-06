@@ -53,6 +53,61 @@ export function amountDue(bill, today = todayString()) {
   return base + lateFineFor(bill, today);
 }
 
+// ---- Reminders and the overdue lock ----
+
+// Where reminders point members to pay.
+export const APP_LINK = 'https://wwgate.in/#/Billing';
+
+// Whole days past the due date (0 when paid or not yet due).
+export function daysOverdue(bill, today = todayString()) {
+  const due = dueDay(bill);
+  if (!due || bill?.status === 'paid') return 0;
+  const ms = new Date(`${today}T00:00:00`) - new Date(`${due}T00:00:00`);
+  return Math.max(0, Math.round(ms / 86400000));
+}
+
+// The first day the flat is locked out if the bill stays unpaid ('yyyy-MM-dd'), or '' when the lock is off.
+export function lockDateFor(bill, days) {
+  const due = dueDay(bill);
+  if (!due || !(days > 0)) return '';
+  const d = new Date(`${due}T00:00:00`);
+  d.setDate(d.getDate() + days + 1); // locked once MORE than `days` days late
+  return todayString(d);
+}
+
+// True when this bill is what locks the flat out right now. The server makes the real decision;
+// this only decides which notice the bill card shows.
+export function isLocked(bill, days) {
+  return days > 0 && bill?.status !== 'paid' && !bill?.payment_claim && !bill?.restriction_waived && daysOverdue(bill) > days;
+}
+
+// The WhatsApp message the admin sends.
+export function reminderMessage(bill, { name } = {}) {
+  const overdue = effectiveStatus(bill) === 'overdue';
+  const month = bill.month_label || bill.month || 'maintenance';
+  const due = dueDay(bill)
+    ? new Date(`${dueDay(bill)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+  const total = amountDue(bill);
+  return [
+    `Hello${name ? ` ${name}` : ''},`,
+    overdue
+      ? `Your maintenance bill for ${month} (Flat ${bill.flat_number}) is overdue${due ? `, it was due on ${due}` : ''}.`
+      : `Your maintenance bill for ${month} (Flat ${bill.flat_number}) is due${due ? ` on ${due}` : ''}.`,
+    `Amount: Rs ${total.toLocaleString('en-IN')}${overdue && lateFineFor(bill) > 0 ? ' (late fine included)' : ''}`,
+    `Pay with GPay or PhonePe here: ${APP_LINK}`,
+    'Thank you.',
+  ].join('\n');
+}
+
+// A wa.me link that opens WhatsApp with the message ready to send. A 10-digit number is treated as Indian.
+export function whatsappReminderLink(phone, text) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const number = digits.length === 10 ? `91${digits}` : digits;
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+}
+
 // Keeps only fixed charges that have a name and an amount above zero (whole rupees).
 export function cleanExtraItems(items) {
   return (items || [])

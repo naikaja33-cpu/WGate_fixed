@@ -58,6 +58,9 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   const contentType = res.headers.get('content-type') || '';
   const data = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
 
+   if (res.status === 403 && data?.code === 'dues_overdue' && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('wgate:dues-overdue'));
+  }
   if (!res.ok) {
     throw new ApiError(data?.message || `Request failed (${res.status})`, res.status, data);
   }
@@ -141,6 +144,12 @@ const flats = {
   // Phone numbers of a flat's residents (admin and guard only, while a visitor is waiting).
   async contacts(flat) {
     return request(`/flats/${encodeURIComponent(flat)}/contacts`);
+  },
+};
+const billing = {
+  // Admin: email a payment reminder to every flat with an overdue bill.
+  async remindEmail() {
+    return request('/billing/remind-email', { method: 'POST', body: {} });
   },
 };
 const gatePass = {
@@ -365,7 +374,8 @@ export const wgate = {
   publicApi,
   flats,
   superadmin,
-  gatePass,
+    gatePass,
+  billing,
   admin,
   family,
 };

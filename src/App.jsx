@@ -13,6 +13,7 @@ import ServiceTickets from '@/pages/ServiceTickets';
 import Profile from '@/pages/Profile';
 import Members from '@/pages/Members';
 import Billing from '@/pages/Billing';
+import DuesRestricted from '@/pages/DuesRestricted';
 import ForceChangePassword from '@/pages/ForceChangePassword';
 import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
 import NoticeBoard from '@/pages/NoticeBoard';
@@ -65,6 +66,11 @@ const AuthenticatedApp = () => {
   // their own dashboard instead of the normal onboarding/app flow.
   if (user.role === 'superadmin') {
     return <SuperAdminDashboard />;
+  }
+
+   // A flat with a bill overdue past the society's limit can only use Billing.
+  if (user.dues_blocked) {
+    return <DuesRestricted />;
   }
 
   // Render the main app
