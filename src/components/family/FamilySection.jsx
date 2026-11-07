@@ -58,7 +58,7 @@ export default function FamilySection() {
     if (!form.full_name.trim()) return setError("Enter the family member's name");
     if (!form.email.trim()) return setError('Enter an email address');
     const digits = form.phone.replace(/\D/g, '');
-    if (digits.length < 7 || digits.length > 15) return setError('Enter a valid phone number');
+      if (digits.length !== 10) return setError('Phone number must be exactly 10 digits');
     addMutation.mutate({ ...form, full_name: form.full_name.trim(), email: form.email.trim(), phone: form.phone.trim() });
   };
 
@@ -150,12 +150,11 @@ export default function FamilySection() {
                   inputMode="tel"
                   placeholder="e.g. 9876543210"
                   value={form.phone}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const digits = raw.replace(/\D/g, '').slice(0, 15);
-                    setForm((f) => ({ ...f, phone: raw.trim().startsWith('+') ? `+${digits}` : digits }));
+                                onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setForm((f) => ({ ...f, phone: digits }));
                   }}
-                  maxLength={16}
+                  maxLength={10}
                 />
               </div>
               <div className="space-y-1.5">

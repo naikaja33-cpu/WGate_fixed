@@ -125,14 +125,9 @@ export default function InviteEditUserModal({ member, onClose, onSaved }) {
             <Input
               type="tel"
               inputMode="tel"
-              placeholder="e.g. 9876543210 or +971501234567"
+                           placeholder="e.g. 9876543210"
               value={phone}
-              onChange={e => {
-                const raw = e.target.value;
-                const hasPlus = raw.trim().startsWith('+');
-                const digits = raw.replace(/\D/g, '').slice(0, 10);
-                setPhone(hasPlus ? `+${digits}` : digits);
-              }}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               maxLength={10}
             />
           </div>

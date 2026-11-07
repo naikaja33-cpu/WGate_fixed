@@ -27,9 +27,8 @@ export default function Profile() {
   });
 
   const handleSave = () => {
-    const digitCount = phone.replace(/\D/g, '').length;
-    if (phone && (digitCount < 7 || digitCount > 15)) {
-      setPhoneError('Enter a valid phone number');
+      if (phone && !/^\d{10}$/.test(phone)) {
+      setPhoneError('Phone number must be exactly 10 digits');
       return;
     }
     setPhoneError('');
@@ -79,15 +78,10 @@ export default function Profile() {
             <Input
               type="tel"
               inputMode="tel"
-              placeholder="Phone number (with country code if not Indian)"
+                          placeholder="10-digit mobile number"
               value={phone}
-              onChange={e => {
-                const raw = e.target.value;
-                const hasPlus = raw.trim().startsWith('+');
-                const digits = raw.replace(/\D/g, '').slice(0, 15);
-                setPhone(hasPlus ? `+${digits}` : digits);
-              }}
-              maxLength={16}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              maxLength={10}
             />
             {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
           </div>

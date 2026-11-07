@@ -234,10 +234,10 @@ const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const normEmail = (email) => String(email || '').trim().toLowerCase();
+// A phone number is optional here, but when given it must be exactly 10 digits (numbers only).
 const isValidPhone = (phone) => {
   if (!phone) return true;
-  const digits = String(phone).replace(/\D/g, '');
-  return digits.length >= 7 && digits.length <= 15;
+  return /^\d{10}$/.test(String(phone).trim());
 };
 
 /* ------------------------------------------------------------------ */

@@ -88,8 +88,8 @@ export default function PostFormModal({ post, defaultPhone, onSubmit, onClose })
       return;
     }
     const digitCount = phone.replace(/\D/g, '').length;
-    if (phone.trim() !== '' && (digitCount < 7 || digitCount > 15)) {
-      setError('Enter a valid phone number, or leave it empty.');
+      if (phone.trim() !== '' && digitCount !== 10) {
+      setError('Phone number must be exactly 10 digits, or leave it empty.');
       return;
     }
     setSaving(true);
@@ -185,8 +185,8 @@ export default function PostFormModal({ post, defaultPhone, onSubmit, onClose })
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Phone (optional)</Label>
-            <Input type="tel" inputMode="tel" value={phone} maxLength={20} placeholder="Shown to neighbours"
-              onChange={(e) => setPhone(e.target.value)} />
+                      <Input type="tel" inputMode="numeric" value={phone} maxLength={10} placeholder="10 digits, shown to neighbours"
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
