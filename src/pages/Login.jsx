@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Shield, ChevronRight, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Shield, ArrowLeft } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
 import AuthLayout from '@/components/AuthLayout';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,14 +8,34 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 
+// The society this phone or browser signed in to last time, so the member does not have to enter the code again.
+const SAVED_KEY = 'wgate_society';
+const readSavedSociety = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null');
+    return s?.id && s?.name ? s : null;
+  } catch {
+    return null;
+  }
+};
+const saveSociety = (s) => {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify({ id: s.id, name: s.name, city: s.city || '' })); } catch { /* ignore */ }
+};
+const forgetSociety = () => {
+  try { localStorage.removeItem(SAVED_KEY); } catch { /* ignore */ }
+};
+
 export default function Login() {
   const { login } = useAuth();
+  const { code: codeFromLink } = useParams(); // set when the page is opened from a /s/<code> link
 
-  const [step, setStep] = useState('society'); // 'society' | 'credentials' | 'forgot'
-  const [societies, setSocieties] = useState([]);
-  const [societiesLoading, setSocietiesLoading] = useState(true);
-  const [societiesError, setSocietiesError] = useState('');
-  const [selectedSociety, setSelectedSociety] = useState(null);
+  const [saved] = useState(readSavedSociety);
+  const [step, setStep] = useState(saved && !codeFromLink ? 'credentials' : 'society'); // 'society' | 'credentials' | 'forgot'
+  const [selectedSociety, setSelectedSociety] = useState(saved);
+
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [codeLoading, setCodeLoading] = useState(!!codeFromLink);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,26 +47,48 @@ export default function Login() {
   const [forgotMessage, setForgotMessage] = useState('');
   const [forgotError, setForgotError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-    wgate.publicApi.societies.list()
-      .then((list) => {
-        if (cancelled) return;
-        setSocieties([...list].sort((a, b) => a.name.localeCompare(b.name)));
-      })
-      .catch(() => {
-        if (!cancelled) setSocietiesError('Could not load societies. Please refresh and try again.');
-      })
-      .finally(() => !cancelled && setSocietiesLoading(false));
-    return () => { cancelled = true; };
-  }, []);
-
   const chooseSociety = (society) => {
+    saveSociety(society);
     setSelectedSociety(society);
     setStep('credentials');
   };
 
+  // Opened from the society's own link: look the society up by the code in the link.
+  useEffect(() => {
+    if (!codeFromLink) return undefined;
+    let cancelled = false;
+    setCodeLoading(true);
+    setCodeError('');
+    wgate.publicApi.societies.byCode(codeFromLink)
+      .then((society) => { if (!cancelled) chooseSociety(society); })
+      .catch((err) => { if (!cancelled) setCodeError(err?.message || 'Could not check the code. Please try again.'); })
+      .finally(() => { if (!cancelled) setCodeLoading(false); });
+    return () => { cancelled = true; };
+  }, [codeFromLink]);
+
+  const handleCodeSubmit = async (e) => {
+    e.preventDefault();
+    setCodeError('');
+    const clean = code.replace(/[^a-zA-Z0-9]/g, '');
+    if (clean.length < 6) {
+      setCodeError('Enter the society code your admin gave you.');
+      return;
+    }
+    setCodeLoading(true);
+    try {
+      chooseSociety(await wgate.publicApi.societies.byCode(clean));
+    } catch (err) {
+      setCodeError(err?.message || 'Could not check the code. Please try again.');
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
   const goBack = () => {
+    forgetSociety();
+    setSelectedSociety(null);
+    setCode('');
+    setCodeError('');
     setStep('society');
     setError('');
   };
@@ -90,44 +132,39 @@ export default function Login() {
       setForgotSubmitting(false);
     }
   };
-            
+
   if (step === 'society') {
     return (
       <AuthLayout
         icon={Shield}
         title="WGATE"
-        subtitle="Select your society to sign in"
-        
+        subtitle="Enter your society code to sign in"
       >
-        <div className="space-y-3">
-          {societiesLoading && (
-            <p className="text-sm text-muted-foreground text-center py-4">Loading societies...</p>
-          )}
-
-          {societiesError && (
-            <p className="text-sm text-destructive text-center py-2">{societiesError}</p>
-          )}
-
-          {!societiesLoading && !societiesError && societies.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No societies have been set up yet. Contact your super admin.
+        <form onSubmit={handleCodeSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="society-code">Society code</Label>
+            <Input
+              id="society-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="e.g. GV7K-9QXM"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              autoComplete="off"
+              maxLength={14}
+              className="font-mono tracking-wider"
+              autoFocus={!codeFromLink}
+            />
+            <p className="text-xs text-muted-foreground">
+              Ask your society admin for the code, or open the sign-in link they shared.
             </p>
-          )}
+          </div>
 
-          {!societiesLoading && societies.map((society) => (
-            <button
-              key={society.id}
-              type="button"
-              onClick={() => chooseSociety(society)}
-              className="w-full flex items-center justify-between p-4 rounded-xl border border-border hover:bg-accent hover:border-accent-foreground/20 transition-colors text-left"
-            >
-              <div>
-                <p className="font-medium">{society.name}</p>
-                {society.city && <p className="text-sm text-muted-foreground">{society.city}</p>}
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-            </button>
-          ))}
+          {codeError && <p className="text-sm text-destructive" role="alert">{codeError}</p>}
+
+          <Button type="submit" className="w-full" disabled={codeLoading}>
+            {codeLoading ? 'Checking...' : 'Continue'}
+          </Button>
 
           <p className="text-center text-sm text-muted-foreground pt-2">
             New society?{' '}
@@ -135,13 +172,12 @@ export default function Login() {
               Sign up
             </Link>
           </p>
-          <p className="text-center text-sm text-muted-foreground pt-2">
-            
+          <p className="text-center text-sm text-muted-foreground">
             <Link to="/home" className="text-primary font-medium hover:underline">
               Back to Home
             </Link>
           </p>
-        </div>
+        </form>
       </AuthLayout>
     );
   }
@@ -215,7 +251,7 @@ export default function Login() {
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
       >
         <ArrowLeft className="w-4 h-4" />
-        Change society
+        Not your society? Change
       </button>
 
       <form onSubmit={handleSubmit} className="space-y-4">

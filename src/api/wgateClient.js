@@ -185,6 +185,9 @@ const superadmin = {
   async upgradeSociety(id, plan) {
     return request(`/superadmin/societies/${id}/upgrade`, { method: 'POST', body: { plan } });
   },
+    async regenerateJoinCode(id) {
+    return request(`/superadmin/societies/${id}/regenerate-code`, { method: 'POST' });
+  },
   async suspendSociety(id, reason) {
     return request(`/superadmin/societies/${id}/suspend`, { method: 'POST', body: { reason } });
   },
@@ -219,6 +222,9 @@ const admin = {
   },
   async updateWhatsappNumber(number) {
     return request('/admin/whatsapp-number', { method: 'PATCH', body: { ticket_whatsapp_number: number } });
+  },
+  async joinCode() {
+    return request('/society/join-code');
   },
 };
 const users = {
@@ -261,8 +267,8 @@ const family = {
 };
 const publicApi = {
   societies: {
-    async list() {
-      return request('/public/societies');
+       async byCode(code) {
+      return request(`/public/society-by-code?code=${encodeURIComponent(code)}`, { auth: false });
     },
   },
   // The festival / welcome banner (no sign-in needed).

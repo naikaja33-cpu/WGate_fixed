@@ -92,7 +92,29 @@ export default function SuperAdminDashboard() {
     loadSocieties();
   }, []);
 
-    const handleDeleteSociety = async (society) => {
+    const formatJoinCode = (c) => (c ? `${c.slice(0, 4)}-${c.slice(4)}` : '');
+
+  const handleCopyLink = async (society) => {
+    try {
+      await navigator.clipboard.writeText(`https://wwgate.in/#/s/${society.join_code}`);
+      toast.success('Sign-in link copied');
+    } catch {
+      toast.error('Could not copy the link');
+    }
+  };
+
+  const handleRegenerateCode = async (society) => {
+    setActionError('');
+    if (!window.confirm(`Make a new code for "${society.name}"? The old code and any shared links stop working straight away.`)) return;
+    try {
+      await wgate.superadmin.regenerateJoinCode(society.id);
+      loadSocieties();
+    } catch (err) {
+      setActionError(err?.message || 'Could not make a new code');
+    }
+  };
+
+  const handleDeleteSociety = async (society) => {
     setActionError('');
     if (!window.confirm(`Delete "${society.name}"? This cannot be undone.`)) return;
     try {
@@ -302,6 +324,18 @@ export default function SuperAdminDashboard() {
                       Suspend
                     </Button>
                   )
+                )}
+                               {society.join_code && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted-foreground">Society code</p>
+                      <p className="font-mono text-sm font-semibold tracking-wider">{formatJoinCode(society.join_code)}</p>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button variant="outline" size="sm" onClick={() => handleCopyLink(society)}>Copy link</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleRegenerateCode(society)}>New code</Button>
+                    </div>
+                  </div>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowAddAdmin(society.id)}>

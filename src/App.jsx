@@ -49,6 +49,7 @@ const AuthenticatedApp = () => {
       <Routes>
         {!isNative && <Route path="/" element={<Home />} />}
         <Route path="/login" element={<Login />} />
+        <Route path="/s/:code" element={<Login />} />
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="*" element={isNative ? <Login /> : <Navigate to="/" replace />} />
@@ -80,7 +81,8 @@ const AuthenticatedApp = () => {
       {/* Already logged in — bounce these public-only pages to the dashboard
           instead of 404ing if the person lands here from a bookmark/old link. */}
       <Route path="/login" element={<Navigate to="/Dashboard" replace />} />
-      <Route path="/signup" element={<Navigate to="/Dashboard" replace />} />
+            <Route path="/signup" element={<Navigate to="/Dashboard" replace />} />
+      <Route path="/s/:code" element={<Navigate to="/Dashboard" replace />} />
       <Route element={<AppLayout />}>
         <Route path="/Dashboard" element={<Dashboard />} />
         <Route path="/Visitors" element={<Visitors />} />

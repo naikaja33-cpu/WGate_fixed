@@ -320,7 +320,12 @@ async function initSchema() {
   // admin at any time (e.g. non-payment, abuse, a support hold).
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT false;`);
   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ;`);
-  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended_reason TEXT;`);
+   await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS suspended_reason TEXT;`);
+  // The short code members use to reach their own society's sign-in screen.
+  await pool.query(`ALTER TABLE societies ADD COLUMN IF NOT EXISTS join_code TEXT;`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_societies_join_code ON societies(join_code);`);
+  const { rows: withoutCode } = await pool.query('SELECT id FROM societies WHERE join_code IS NULL');
+  for (const row of withoutCode) await assignJoinCode(row.id);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS superadmins (
       id UUID PRIMARY KEY,
@@ -354,12 +359,35 @@ async function initSchema() {
   `);
 }
 
+// An 8-character code with no 0/O/1/I, so it is easy to read out loud and type.
+function generateJoinCode() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i += 1) code += letters[crypto.randomInt(letters.length)];
+  return code;
+}
+
+// Saves a new code for the society (used for new societies and when the super admin asks for a new one).
+async function assignJoinCode(societyId) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const code = generateJoinCode();
+      await pool.query('UPDATE societies SET join_code = $1, updated_date = now() WHERE id = $2', [code, societyId]);
+      return code;
+    } catch (err) {
+      if (err.code !== '23505') throw err; // 23505 = that code is already taken, try another
+    }
+  }
+  throw new Error('Could not create a society code');
+}
+
 function rowToSociety(row) {
   return {
     id: row.id,
     name: row.name,
     city: row.city || '',
     address: row.address || '',
+    join_code: row.join_code || '',
     total_flats: row.total_flats,
     plan: row.plan || 'trial',
     trial_ends_at: row.trial_ends_at instanceof Date ? row.trial_ends_at.toISOString() : row.trial_ends_at,
@@ -447,6 +475,7 @@ async function createSocietyRecord({ name, city, address, total_flats, approved 
     [id, name, city || '', address || '', total_flats ?? null, schemaName, approved, approved ? nowIso() : null, plan, trialEndsAt]
   );
   await ensureSocietySchema(schemaName);
+  await assignJoinCode(id);
   return getSocietyById(id);
 }
 
@@ -1069,16 +1098,45 @@ app.get('/api/public-settings', (_req, res) => {
   res.json({ id: 'wgate-local', public_settings: { auth_mode: 'local', app_name: 'WGate' } });
 });
 
-app.get('/api/public/societies', wrap(async (_req, res) => {
-  const societies = await listSocieties();
-  // Only approved societies can log in, so only offer those on the login
-  // screen — a society that just signed up has nothing to select yet.
-  res.json(
-    societies
-      .filter((s) => s.approved)
-          .map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats }))
-  );
+const codeFailures = createLimiter({ windowMs: 15 * MINUTE, max: 15 });
+const codeLookupLimit = rateLimit({
+  windowMs: MINUTE, max: 60, keyFn: (req) => `joincode:${clientIp(req)}`,
+  message: 'Too many requests. Please wait a minute and try again.',
+});
+
+// A member enters (or opens a link with) their society's code and gets back only that society.
+// Nothing here lists societies, so a stranger cannot browse who uses WGate.
+app.get('/api/public/society-by-code', codeLookupLimit, wrap(async (req, res) => {
+  const failKey = `code|${clientIp(req)}`;
+  const lockedFor = codeFailures.blockedFor(failKey);
+  if (lockedFor) return sendTooMany(res, lockedFor, 'Too many wrong codes. Please wait a few minutes and try again.');
+  const code = String(req.query.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const { rows } = code.length >= 6 && code.length <= 12
+    ? await pool.query('SELECT id, name, city FROM societies WHERE join_code = $1 AND approved = true', [code])
+    : { rows: [] };
+  if (!rows[0]) {
+    codeFailures.hit(failKey);
+    return res.status(404).json({ message: 'That society code was not found. Please check it with your society admin.' });
+  }
+  codeFailures.reset(failKey);
+  res.json({ id: rows[0].id, name: rows[0].name, city: rows[0].city || '' });
 }));
+
+// The old list of every society. Still here for now so installed apps keep working; Part 3 removes it.
+// app.get('/api/public/societies', wrap(async (_req, res) => {
+//   const societies = await listSocieties();
+//   // Only approved societies can log in, so only offer those on the login
+//   // screen — a society that just signed up has nothing to select yet.
+//   res.json(
+//     societies
+//       .filter((s) => s.approved)
+//           .map(({ id, name, city, total_flats }) => ({ id, name, city, total_flats }))
+//   );
+// }));
+// The public list of societies is switched off (it showed every society to anyone).
+app.get('/api/public/societies', (_req, res) => {
+  res.status(410).json({ message: 'Please update the WGate app.' });
+});
 
 /* Festival / welcome banner: one platform-wide pop-up that the super admin controls.
    Stored as a single row in platform_settings and shown to everyone when they open the app. */
@@ -1801,6 +1859,18 @@ const tempPassword = generateTempPassword();
   await insertEntityRecord(schemaName, 'User', adminUser);
     res.status(201).json({ ...publicUser(adminUser), initial_password: tempPassword });
   // res.status(201).json({ ...publicUser(adminUser), initial_password: DEFAULT_INVITE_PASSWORD });
+}));
+
+// Use when a code has been shared with the wrong people. The old code and links stop working at once.
+app.post('/api/superadmin/societies/:id/regenerate-code', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  res.json({ join_code: await assignJoinCode(society.id) });
+}));
+
+// The society admin reads their own society's code, to share it with residents.
+app.get('/api/society/join-code', requireAuth, requireAdmin, requireSocietySchema, wrap(async (req, res) => {
+  res.json({ join_code: req.society?.join_code || '', name: req.society?.name || '' });
 }));
 
 app.get('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async (_req, res) => {
