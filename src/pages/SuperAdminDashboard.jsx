@@ -508,7 +508,8 @@ function AddAdminModal({ societyId, onClose, onCreated }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email.trim()) { setError('Email is required'); return; }
+     if (!email.trim()) { setError('Email is required'); return; }
+    if (phone && phone.length !== 10) { setError('Phone number must be exactly 10 digits'); return; }
     setIsSubmitting(true);
     try {
       const created = await wgate.superadmin.createAdmin({
@@ -540,7 +541,14 @@ function AddAdminModal({ societyId, onClose, onCreated }) {
           </div>
           <div className="space-y-1.5">
             <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+                      <Input
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              value={phone}
+              placeholder="10-digit mobile number"
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            />
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex gap-2 pt-1">

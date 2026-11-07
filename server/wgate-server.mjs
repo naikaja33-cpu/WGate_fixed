@@ -1841,6 +1841,11 @@ app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (r
   if (await findUserByEmail(schemaName, email)) {
     return res.status(409).json({ message: 'A user with this email already exists in this society' });
   }
+  // Phone is optional, but when given it must be exactly 10 digits (numbers only).
+  const phoneInput = String(req.body?.phone ?? '').trim();
+  if (phoneInput && !/^\d{10}$/.test(phoneInput)) {
+    return res.status(400).json({ message: 'Phone number must be exactly 10 digits, numbers only' });
+  }
 const tempPassword = generateTempPassword();
   const adminUser = {
     ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
