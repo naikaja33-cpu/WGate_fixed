@@ -14,7 +14,7 @@
     "server": "node server/wgate-server.mjs",
     "preview": "vite preview",
     "build:ghpages": "vite build",
-    "build:android": "cross-env VITE_API_URL=https://wgate-fixed.onrender.com/api vite build && npx cap sync android",
+       "build:android": "cross-env VITE_API_URL=https://wgate-fixed.onrender.com/api vite build && node -e \"require('node:fs').rmSync('dist/wgate.apk',{force:true})\" && npx cap sync android",
     "deploy": "npm run build:ghpages && gh-pages -d dist"
   },
   "dependencies": {
