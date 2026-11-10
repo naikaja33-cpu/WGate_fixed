@@ -23,9 +23,12 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
         <div className="bg-card rounded-2xl shadow-sm border border-border p-8">
           {children}
         </div>
-        {footer && (
+              {footer && (
           <p className="text-center text-sm text-muted-foreground mt-6">{footer}</p>
         )}
+        {/* <p className="text-center text-xs text-muted-foreground mt-4">
+          <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
+        </p> */}
       </div>
     </div>
   );

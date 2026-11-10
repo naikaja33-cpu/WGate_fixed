@@ -105,6 +105,10 @@ export default function Home() {
                 **Not on the Play Store yet — your phone will ask to allow installs from this source the first time.
         </p>
       </section>
+
+      {/* <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+        <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
+      </footer> */}
     </div>
   );
 }

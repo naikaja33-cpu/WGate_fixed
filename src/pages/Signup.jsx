@@ -23,7 +23,7 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null); // { society } once signed up
-
+const [agreed, setAgreed] = useState(false);
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   // Digits only, capped at 15 — matches the backend's isValidPhone check
@@ -38,6 +38,7 @@ export default function Signup() {
     e.preventDefault();
     setError('');
     if (!form.society_name.trim()) return setError('Society name is required');
+    //if (!agreed) return setError('Please accept the Privacy Policy to continue');
     if (!form.email.trim()) return setError('Email is required');
     if (!form.password || form.password.length < 6) return setError('Password must be at least 6 characters');
     if (form.phone && (form.phone.length < 10 || form.phone.length > 10)) return setError('Enter a valid phone number');
@@ -164,6 +165,15 @@ export default function Signup() {
         <p className="text-xs text-muted-foreground">
           Your society starts on a 14-day trial, which begins once a super admin approves your signup. You won&apos;t be able to sign in until then.
         </p>
+
+        {/* <label className="flex items-start gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+          <span>
+            I have read the{' '}
+            <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>
+            {' '}and agree that WGate may use the information I enter as described there.
+          </span>
+        </label> */}
 
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? 'Submitting...' : 'Create Society'}

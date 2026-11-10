@@ -14,6 +14,7 @@ import Profile from '@/pages/Profile';
 import Members from '@/pages/Members';
 import Billing from '@/pages/Billing';
 import DuesRestricted from '@/pages/DuesRestricted';
+import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import ForceChangePassword from '@/pages/ForceChangePassword';
 import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
 import NoticeBoard from '@/pages/NoticeBoard';
@@ -50,6 +51,7 @@ const AuthenticatedApp = () => {
         {!isNative && <Route path="/" element={<Home />} />}
         <Route path="/login" element={<Login />} />
         <Route path="/s/:code" element={<Login />} />
+         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="*" element={isNative ? <Login /> : <Navigate to="/" replace />} />
@@ -83,6 +85,7 @@ const AuthenticatedApp = () => {
       <Route path="/login" element={<Navigate to="/Dashboard" replace />} />
             <Route path="/signup" element={<Navigate to="/Dashboard" replace />} />
       <Route path="/s/:code" element={<Navigate to="/Dashboard" replace />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route element={<AppLayout />}>
         <Route path="/Dashboard" element={<Dashboard />} />
         <Route path="/Visitors" element={<Visitors />} />

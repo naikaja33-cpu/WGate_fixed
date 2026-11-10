@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { Button } from '@/components/ui/button';
@@ -99,6 +100,10 @@ export default function Profile() {
       >
         <LogOut className="w-4 h-4 mr-2" /> Sign Out
       </Button>
+
+      {/* <p className="text-center text-xs text-muted-foreground">
+        <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
+      </p> */}
     </div>
   );
 }

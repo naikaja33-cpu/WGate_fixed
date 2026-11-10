@@ -16,6 +16,7 @@ export default function AnnouncementCard() {
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [expanded, setExpanded] = useState(false); // the settings start folded to save space
 
   useEffect(() => {
     let cancelled = false;
@@ -72,10 +73,20 @@ export default function AnnouncementCard() {
             <Switch checked={!!form.enabled} onCheckedChange={(v) => set('enabled', v)} />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          A pop-up shown once to every user of every society when they open the app. Saving a new message shows it again.
-        </p>
+               <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+          <input type="checkbox" checked={expanded} onChange={(e) => setExpanded(e.target.checked)} className="h-4 w-4 accent-primary" />
+          {expanded ? 'Hide settings' : 'Show settings'}
+        </label>
+        {!expanded && form.title && (
+          <p className="text-xs text-muted-foreground truncate">{form.enabled ? 'Showing' : 'Off'}: {form.title}</p>
+        )}
+        {expanded && (
+          <p className="text-xs text-muted-foreground">
+            A pop-up shown once to every user of every society when they open the app. Saving a new message shows it again.
+          </p>
+        )}
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
           <Label className="text-xs">Occasion</Label>
@@ -129,6 +140,7 @@ export default function AnnouncementCard() {
           </Button>
         </div>
       </CardContent>
+      )}
 
       {showPreview && <AnnouncementModal announcement={form} onClose={() => setShowPreview(false)} />}
     </Card>
