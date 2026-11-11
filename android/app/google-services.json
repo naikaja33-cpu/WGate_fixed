@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "215287549937",
+    "project_id": "wgate-b3433",
+    "storage_bucket": "wgate-b3433.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:215287549937:android:9e371787978b7b7b1efe50",
+        "android_client_info": {
+          "package_name": "com.wgate.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgZrq6wpONGVl3NVlsK5ytV9bjA53Q5lc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

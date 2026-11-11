@@ -28,6 +28,8 @@ import cors from 'cors';
 import compression from 'compression';
 import crypto from 'node:crypto';
 import pg from 'pg';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 
 
 // dotenv's default `dotenv/config` import only reads a file named
@@ -370,7 +372,18 @@ async function initSchema() {
       expires_at TIMESTAMPTZ NOT NULL
     );
   `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);`);
+  // Phone push-notification tokens (one row per installed app).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      schema_name TEXT NOT NULL,
+      session_id UUID,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(schema_name, user_id);`);
   // Platform-wide settings (not tied to any society), e.g. the festival banner.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS platform_settings (
@@ -962,6 +975,72 @@ function requireSocietySchema(req, res, next) {
 /* Server-sent events (for entity.subscribe)                          */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Push notifications (Firebase Cloud Messaging)                      */
+/* ------------------------------------------------------------------ */
+
+let fcm = null;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
+    fcm = getMessaging();
+    console.log('[push] Firebase ready');
+  } else {
+    console.log('[push] FIREBASE_SERVICE_ACCOUNT not set - push notifications are off');
+  }
+} catch (err) {
+  console.error('[push] Firebase could not start:', err.message);
+}
+
+// Sends one notification to every phone these users are signed in on.
+// Never throws: a failed push must not break the request that triggered it.
+async function sendPushToUsers(schemaName, userIds, { title, body, data = {}, channelId = 'visitors' }) {
+  if (!fcm || !userIds.length) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.token FROM push_tokens p
+         JOIN sessions s ON s.id = p.session_id AND s.expires_at > now()
+        WHERE p.schema_name = $1 AND p.user_id = ANY($2::text[])`,
+      [schemaName, userIds.map(String)]
+    );
+    const tokens = [...new Set(rows.map((r) => r.token))];
+    if (!tokens.length) return;
+    const payload = {};
+    for (const [k, v] of Object.entries(data)) payload[k] = String(v ?? '');
+    const result = await fcm.sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      data: payload,
+      android: { priority: 'high', ttl: 120000, notification: { channelId, sound: 'default' } },
+    });
+    // Forget phones that no longer have the app installed.
+    const dead = [];
+    result.responses.forEach((r, i) => {
+      const code = r.error?.code;
+      if (!r.success && (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token')) dead.push(tokens[i]);
+    });
+    if (dead.length) await pool.query('DELETE FROM push_tokens WHERE token = ANY($1::text[])', [dead]);
+  } catch (err) {
+    console.error('[push] send failed:', err.message);
+  }
+}
+
+// A guard logged a visitor: tell everyone living in that flat.
+async function notifyVisitorAtGate(schemaName, visitor) {
+  if (!fcm) return;
+  const users = await listEntity(schemaName, 'User');
+  const ids = users
+    .filter((u) => isResident(u) && !u.disabled && flatKey(u.flat_number) && flatKey(u.flat_number) === flatKey(visitor.flat_number))
+    .map((u) => u.id);
+  const what = visitor.purpose ? ` (${visitor.purpose})` : '';
+  await sendPushToUsers(schemaName, ids, {
+    title: 'Visitor at the gate',
+    body: `${visitor.visitor_name || 'Someone'}${what} is waiting for your approval.`,
+    data: { type: 'visitor', url: '/Visitors', visitor_id: visitor.id },
+    channelId: 'visitors',
+  });
+}
+
 const sseClients = new Map(); // res -> schemaName
 
 function broadcast(schemaName, entity, type, record) {
@@ -1347,6 +1426,21 @@ app.post('/api/auth/logout', wrap(async (req, res) => {
       await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);
     authCache.delete(sha256(token));
   }
+  res.json({ success: true });
+}));
+
+// The app tells us its phone's push token after sign-in.
+app.post('/api/push/register', requireAuth, requireSocietySchema, wrap(async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (token.length < 20 || token.length > 4096) return res.status(400).json({ message: 'Invalid token' });
+  await pool.query(
+    `INSERT INTO push_tokens (token, user_id, schema_name, session_id, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (token) DO UPDATE
+       SET user_id = EXCLUDED.user_id, schema_name = EXCLUDED.schema_name,
+           session_id = EXCLUDED.session_id, updated_at = now()`,
+    [token, String(req.user.id), req.schemaName, req.session.id]
+  );
   res.json({ success: true });
 }));
 
@@ -2896,6 +2990,11 @@ entityRouter.post('/:name', wrap(async (req, res) => {
     await insertEntityRecord(req.schemaName, entity, record);
     broadcast(req.schemaName, entity, 'create', record);
     res.status(201).json(clean(entity, record));
+
+    // Fire-and-forget: push the visitor alert to the flat's phones.
+    if (entity === 'Visitor' && record.status === 'pending') {
+      notifyVisitorAtGate(req.schemaName, record).catch((err) => console.error('[push] visitor notify failed:', err.message));
+    }
 
     // Fire-and-forget: notify the society's configured WhatsApp number
     // about the new ticket. Never awaited — a slow/failed WhatsApp send
