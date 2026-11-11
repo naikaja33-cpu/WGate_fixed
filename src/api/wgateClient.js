@@ -265,6 +265,11 @@ const family = {
     return request(`/family/${id}`, { method: 'DELETE' });
   },
 };
+const push = {
+  register(token) {
+    return request('/push/register', { method: 'POST', body: { token } });
+  },
+};
 const publicApi = {
   societies: {
        async byCode(code) {
@@ -384,6 +389,7 @@ export const wgate = {
   billing,
   admin,
   family,
+  push,
 };
 
 export default wgate;
