@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -6,29 +7,48 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
-import SuperAdminLogin from '@/pages/SuperAdminLogin';
-import Dashboard from '@/pages/Dashboard';
-import Visitors from '@/pages/Visitors';
-import ServiceTickets from '@/pages/ServiceTickets';
-import Profile from '@/pages/Profile';
-import Members from '@/pages/Members';
-import Billing from '@/pages/Billing';
-import DuesRestricted from '@/pages/DuesRestricted';
-import PrivacyPolicy from '@/pages/PrivacyPolicy';
-import ForceChangePassword from '@/pages/ForceChangePassword';
-import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
-import NoticeBoard from '@/pages/NoticeBoard';
-import Community from '@/pages/Community';
+// import SuperAdminLogin from '@/pages/SuperAdminLogin';
+// import Dashboard from '@/pages/Dashboard';
+// import Visitors from '@/pages/Visitors';
+// import ServiceTickets from '@/pages/ServiceTickets';
+// import Profile from '@/pages/Profile';
+// import Members from '@/pages/Members';
+// import Billing from '@/pages/Billing';
+// import DuesRestricted from '@/pages/DuesRestricted';
+// import PrivacyPolicy from '@/pages/PrivacyPolicy';
+// import ForceChangePassword from '@/pages/ForceChangePassword';
+// import SuperAdminDashboard from '@/pages/SuperAdminDashboard';
+//import NoticeBoard from '@/pages/NoticeBoard';
+//import Community from '@/pages/Community';
 import { NotificationProvider } from '@/components/notifications/NotificationProvider';
 import { Toaster as SonnerToaster } from 'sonner';
-import Signup from '@/pages/Signup';
-import Amenities from '@/pages/Amenities';
-import PreApprovals from '@/pages/PreApprovals';
-import GatePasses from '@/pages/GatePasses';
-import Home from '@/pages/Home';
+// import Signup from '@/pages/Signup';
+// import Amenities from '@/pages/Amenities';
+// import PreApprovals from '@/pages/PreApprovals';
+// import GatePasses from '@/pages/GatePasses';
+//import Home from '@/pages/Home';
 import { Capacitor } from '@capacitor/core';
 import UpdateBanner from '@/components/UpdateBanner';
 import WelcomeBanner from '@/components/announcement/WelcomeBanner';
+
+const SuperAdminLogin = lazy(() => import('@/pages/SuperAdminLogin'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Visitors = lazy(() => import('@/pages/Visitors'));
+const ServiceTickets = lazy(() => import('@/pages/ServiceTickets'));
+const Profile = lazy(() => import('@/pages/Profile'));
+const Members = lazy(() => import('@/pages/Members'));
+const Billing = lazy(() => import('@/pages/Billing'));
+const DuesRestricted = lazy(() => import('@/pages/DuesRestricted'));
+const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy'));
+const ForceChangePassword = lazy(() => import('@/pages/ForceChangePassword'));
+const SuperAdminDashboard = lazy(() => import('@/pages/SuperAdminDashboard'));
+const NoticeBoard = lazy(() => import('@/pages/NoticeBoard'));
+const Community = lazy(() => import('@/pages/Community'));
+const Signup = lazy(() => import('@/pages/Signup'));
+const Amenities = lazy(() => import('@/pages/Amenities'));
+const PreApprovals = lazy(() => import('@/pages/PreApprovals'));
+const GatePasses = lazy(() => import('@/pages/GatePasses'));
+const Home = lazy(() => import('@/pages/Home'));
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -115,7 +135,9 @@ function App() {
           <UpdateBanner />
            <WelcomeBanner />
           <NotificationProvider>
-            <AuthenticatedApp />
+                        <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center"><div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" /></div>}>
+              <AuthenticatedApp />
+            </Suspense>
           </NotificationProvider>
         </Router>
         <Toaster />

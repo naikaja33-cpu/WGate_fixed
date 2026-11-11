@@ -14,7 +14,17 @@ export default defineConfig({
   // VITE_BASE_PATH=/repo-name/ when building. Defaults to '/' for local dev
   // and for hosts that serve the app at the domain root.
   base: process.env.VITE_BASE_PATH || '/',
-  plugins: [react()],
+    plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

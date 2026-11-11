@@ -25,6 +25,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import crypto from 'node:crypto';
 import pg from 'pg';
 
@@ -277,6 +278,26 @@ function schemaNameForSociety(societyId) {
   return `society_${societyId.replace(/-/g, '')}`;
 }
 
+// Lets the database find the newest visitors without reading all of them.
+async function createEntityIndexes(schemaName) {
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_entity_records_newest ON "${schemaName}".entity_records(entity, created_date DESC);`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_visitor_flat_newest ON "${schemaName}".entity_records ((lower(btrim(data->>'flat_number'))), created_date DESC) WHERE entity = 'Visitor';`
+  );
+}
+
+// Adds the indexes to every society that already exists. Runs each time the server starts and is quick once done.
+async function ensureEntityIndexes() {
+  const { rows: schemas } = await pool.query('SELECT schema_name FROM societies');
+  for (const { schema_name } of schemas) {
+    try {
+      await createEntityIndexes(schema_name);
+    } catch (err) {
+      console.warn(`[wgate-api] Could not add indexes to ${schema_name}:`, err.message);
+    }
+  }
+}
+
 async function ensureSocietySchema(schemaName) {
   await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
   await pool.query(`
@@ -290,6 +311,7 @@ async function ensureSocietySchema(schemaName) {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_entity_records_entity ON "${schemaName}".entity_records(entity);`);
+  await createEntityIndexes(schemaName);
 }
 
 /* ------------------------------------------------------------------ */
@@ -493,6 +515,7 @@ async function approveSocietyRecord(id) {
 }
 
 async function updateSocietyRecord(id, patch) {
+  clearAuthCache();
   const existing = await getSocietyById(id);
   if (!existing) return null;
   const merged = { ...existing, ...patch };
@@ -531,7 +554,14 @@ async function getEntityRecord(schemaName, entity, id) {
   return rows[0]?.data || null;
 }
 
+// Who is signed in, remembered for 30 seconds so every request does not hit the database three times.
+// It is cleared at once when any user, society or sign-out changes, so a disabled member is not kept waiting.
+const AUTH_CACHE_MS = 30 * 1000;
+const authCache = new Map(); // token hash -> { at, value }
+const clearAuthCache = () => authCache.clear();
+
 async function insertEntityRecord(schemaName, entity, record) {
+  if (entity === 'User') clearAuthCache();
   await pool.query(
     `INSERT INTO "${schemaName}".entity_records (entity, id, data, created_date, updated_date) VALUES ($1,$2,$3,$4,$5)`,
     [entity, record.id, record, record.created_date, record.updated_date]
@@ -540,14 +570,15 @@ async function insertEntityRecord(schemaName, entity, record) {
 }
 
 async function updateEntityRecord(schemaName, entity, id, record) {
+  if (entity === 'User') clearAuthCache();
   await pool.query(
     `UPDATE "${schemaName}".entity_records SET data=$1, updated_date=$2 WHERE entity=$3 AND id=$4`,
     [record, record.updated_date, entity, id]
   );
   return record;
 }
-
 async function deleteEntityRecord(schemaName, entity, id) {
+  if (entity === 'User') clearAuthCache();
   await pool.query(`DELETE FROM "${schemaName}".entity_records WHERE entity=$1 AND id=$2`, [entity, id]);
 }
 
@@ -806,6 +837,19 @@ async function familyAccountBlocked(schemaName, user) {
   return !parent || parent.disabled === true;
 }
 async function resolveSession(token) {
+  if (!token) return null;
+  const key = sha256(token);
+  const hit = authCache.get(key);
+  if (hit && Date.now() - hit.at < AUTH_CACHE_MS) return hit.value;
+  const value = await resolveSessionFromDb(token);
+  if (value) {
+    if (authCache.size > 2000) authCache.clear(); // keep the memory small
+    authCache.set(key, { at: Date.now(), value });
+  }
+  return value;
+}
+
+async function resolveSessionFromDb(token) {
   if (!token) return null;
   const { rows } = await pool.query(
     'SELECT * FROM sessions WHERE token_hash = $1 AND expires_at > now()',
@@ -1085,6 +1129,10 @@ app.disable('x-powered-by');
 // and the limits would hit everyone at once). Set TRUST_PROXY=0 locally if needed.
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 app.use(cors());
+// Shrinks JSON responses (lists, photos' text) before they travel. The live-updates stream is left alone.
+app.use(compression({
+  filter: (req, res) => (req.originalUrl.startsWith('/api/events') ? false : compression.filter(req, res)),
+}));
 app.use(express.json({ limit: '10mb' }));
 
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
@@ -1296,7 +1344,8 @@ app.post('/api/auth/login', loginIpLimit, wrap(async (req, res) => {
 app.post('/api/auth/logout', wrap(async (req, res) => {
   const token = bearerToken(req);
   if (token) {
-    await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);
+      await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);
+    authCache.delete(sha256(token));
   }
   res.json({ success: true });
 }));
@@ -2765,7 +2814,32 @@ entityRouter.get('/:name', wrap(async (req, res) => {
   if (req.query.q) {
     try { query = JSON.parse(String(req.query.q)); } catch { return res.status(400).json({ message: 'Invalid q parameter' }); }
   }
-  let rows = await listEntity(req.schemaName, entity);
+  let rows;
+  let fastPath = false;
+  const pageSize = parseInt(req.query.limit, 10);
+  const pageSkip = Math.max(0, parseInt(req.query.skip, 10) || 0);
+  const queryKeys = Object.keys(query);
+  const newestFirst = !req.query.sort || String(req.query.sort) === '-created_date';
+  // Visitors pile up all year. For the usual list (newest first, a page at a time) the database returns just that page.
+  const staffList = isStaff(req.user) && queryKeys.length === 0;
+  const flatList = !isStaff(req.user) && queryKeys.length === 1 && queryKeys[0] === 'flat_number' && typeof query.flat_number === 'string';
+  if (entity === 'Visitor' && newestFirst && Number.isFinite(pageSize) && pageSize > 0 && (staffList || flatList)) {
+    const params = [];
+    let where = "entity = 'Visitor'";
+    if (flatList) {
+      params.push(flatKey(query.flat_number));
+      where += ` AND lower(btrim(data->>'flat_number')) = $${params.length}`;
+    }
+    params.push(pageSize, pageSkip);
+    const found = await pool.query(
+      `SELECT data FROM "${req.schemaName}".entity_records WHERE ${where} ORDER BY created_date DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    rows = found.rows.map((r) => r.data);
+    fastPath = true;
+  } else {
+    rows = await listEntity(req.schemaName, entity);
+  }
   // entity === 'User' &&
   if ( req.user.role !== 'admin') {
   rows = rows.filter((r) => canRead(req.user, entity, r));
@@ -2776,7 +2850,7 @@ entityRouter.get('/:name', wrap(async (req, res) => {
   rows = sortRecords(rows, req.query.sort ? String(req.query.sort) : '-created_date');
   const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
   const limit = parseInt(req.query.limit, 10);
-  rows = rows.slice(skip, Number.isFinite(limit) && limit > 0 ? skip + limit : undefined);
+  if (!fastPath) rows = rows.slice(skip, Number.isFinite(limit) && limit > 0 ? skip + limit : undefined);
   if (entity === 'ClassifiedPost') {
     // Lists carry only the small thumbnails; the full photos load when a post's photo is opened.
     return res.json(rows.map((r) => {
@@ -3065,6 +3139,7 @@ async function main() {
   await initSchema();
   await seedIfEmpty();
   await pruneSessions();
+  await ensureEntityIndexes();
   await cleanupOldRecords();
   // Re-run once a day for as long as the process stays up.
   setInterval(cleanupOldRecords, 24 * 60 * 60 * 1000);

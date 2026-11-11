@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { wgate } from '@/api/wgateClient';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { Plus, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,13 +20,14 @@ export default function Visitors() {
   const [statusFilter, setStatusFilter] = useState('all');
   const queryClient = useQueryClient();
 
-  const { data: visitors = [], isLoading } = useQuery({
-    queryKey: ['visitors'],
+  const [pageSize, setPageSize] = useState(50); // "Load more" adds 50 at a time
+  const { data: visitors = [], isLoading, isFetching } = useQuery({
+    queryKey: ['visitors', pageSize],
     queryFn: () => {
-      if (isAdmin) return wgate.entities.Visitor.list('-created_date', 100);
-      if (isGuard) return wgate.entities.Visitor.list('-created_date', 100);
-      return wgate.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', 50);
+      if (isAdmin || isGuard) return wgate.entities.Visitor.list('-created_date', pageSize);
+      return wgate.entities.Visitor.filter({ flat_number: user.flat_number }, '-created_date', pageSize);
     },
+    placeholderData: keepPreviousData, // keep showing the current list while more load
   });
 
   const createMutation = useMutation({
@@ -98,7 +99,13 @@ export default function Visitors() {
                 onReject={handleReject}
                 onCheckout={handleCheckout}
               />
-            ))}
+                      ))}
+            {visitors.length >= pageSize && (
+              <Button variant="outline" className="w-full rounded-xl" disabled={isFetching}
+                onClick={() => setPageSize((n) => n + 50)}>
+                {isFetching ? 'Loading...' : 'Load more'}
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell,CalendarClock,UserCheck, KeyRound ,Store } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
@@ -117,7 +118,9 @@ export default function AppLayout() {
         ) : isBlocked ? (
           <Navigate to="/Dashboard" replace />
         ) : (
-          <Outlet />
+          <Suspense fallback={<div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+            <Outlet />
+          </Suspense>
         )}
       </main>
 
