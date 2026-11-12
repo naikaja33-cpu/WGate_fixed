@@ -265,6 +265,17 @@ const family = {
     return request(`/family/${id}`, { method: 'DELETE' });
   },
 };
+const emergency = {
+  send(kind, note) {
+    return request('/emergency', { method: 'POST', body: { kind, note } });
+  },
+  active() {
+    return request('/emergency/active');
+  },
+  acknowledge(id) {
+    return request(`/emergency/${id}/ack`, { method: 'POST' });
+  },
+};
 const push = {
   register(token) {
     return request('/push/register', { method: 'POST', body: { token } });
@@ -390,6 +401,7 @@ export const wgate = {
   admin,
   family,
   push,
+  emergency,
 };
 
 export default wgate;

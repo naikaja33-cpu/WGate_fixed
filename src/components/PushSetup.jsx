@@ -39,6 +39,14 @@ export default function PushSetup() {
           visibility: 1,
           vibration: true,
         });
+                await PushNotifications.createChannel({
+          id: 'emergency',
+          name: 'Emergency alerts',
+          description: 'Alerts when a resident presses the emergency button',
+          importance: 5,
+          visibility: 1,
+          vibration: true,
+        });
         let perm = await PushNotifications.checkPermissions();
         if (perm.receive === 'prompt') perm = await PushNotifications.requestPermissions();
         if (perm.receive !== 'granted') return;

@@ -30,6 +30,8 @@ import { Toaster as SonnerToaster } from 'sonner';
 import { Capacitor } from '@capacitor/core';
 import UpdateBanner from '@/components/UpdateBanner';
 import PushSetup from '@/components/PushSetup';
+import EmergencyButton from '@/components/EmergencyButton';
+import EmergencyAlerts from '@/components/EmergencyAlerts';
 import WelcomeBanner from '@/components/announcement/WelcomeBanner';
 
 const SuperAdminLogin = lazy(() => import('@/pages/SuperAdminLogin'));
@@ -134,7 +136,9 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <UpdateBanner />
-          <PushSetup />
+                   <PushSetup />
+          <EmergencyButton />
+          <EmergencyAlerts />
            <WelcomeBanner />
           <NotificationProvider>
                         <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center"><div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin" /></div>}>
