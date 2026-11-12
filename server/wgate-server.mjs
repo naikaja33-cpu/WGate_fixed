@@ -383,7 +383,24 @@ async function initSchema() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(schema_name, user_id);`);
+await pool.query(`CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(schema_name, user_id);`);
+  // Emergency (SOS) alerts sent by residents.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS emergency_alerts (
+      id UUID PRIMARY KEY,
+      schema_name TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT,
+      user_phone TEXT,
+      flat_number TEXT,
+      kind TEXT NOT NULL,
+      note TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ack_by_name TEXT,
+      ack_at TIMESTAMPTZ
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_emergency_alerts_society ON emergency_alerts(schema_name, created_at DESC);`);
   // Platform-wide settings (not tied to any society), e.g. the festival banner.
   await pool.query(`
     CREATE TABLE IF NOT EXISTS platform_settings (
@@ -930,7 +947,7 @@ async function duesBlocked(schemaName, user) {
 }
 
 // What a locked flat can still reach: sign-in/out, its bills, the UPI details and flat size.
-const DUES_ALLOWED = /^\/api\/(auth\/|entities\/(MaintenanceBill|PaymentConfig|FlatArea|SocietySettings)(\/|\?|$))/;
+const DUES_ALLOWED = /^\/api\/(auth\/|emergency|push\/|entities\/(MaintenanceBill|PaymentConfig|FlatArea|SocietySettings)(\/|\?|$))/;
 
 async function requireAuth(req, res, next) {
   try {
@@ -1426,6 +1443,73 @@ app.post('/api/auth/logout', wrap(async (req, res) => {
       await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);
     authCache.delete(sha256(token));
   }
+  res.json({ success: true });
+}));
+
+/* ------------------------- emergency (SOS) alerts ------------------------- */
+
+const EMERGENCY_KINDS = {
+  medical: 'Medical emergency',
+  fire: 'Fire',
+  security: 'Security / theft',
+  other: 'Other emergency',
+};
+const emergencyLimit = rateLimit({
+  windowMs: 60 * 1000, max: 2, keyFn: (req) => `sos:${req.user?.id || clientIp(req)}`,
+  message: 'An alert was just sent. Security and the admin have been notified.',
+});
+const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+const alertRow = (r) => ({
+  id: r.id, kind: r.kind, label: EMERGENCY_KINDS[r.kind] || 'Emergency',
+  flat_number: r.flat_number, user_name: r.user_name, user_phone: r.user_phone, note: r.note,
+  created_at: r.created_at, ack_by_name: r.ack_by_name, ack_at: r.ack_at,
+});
+
+// A resident presses the emergency button: every guard and admin gets a push and a banner.
+app.post('/api/emergency', requireAuth, requireSocietySchema, emergencyLimit, wrap(async (req, res) => {
+  const user = req.user;
+  if (!isResident(user)) return res.status(403).json({ message: 'Only residents can send an emergency alert' });
+  const kind = EMERGENCY_KINDS[req.body?.kind] ? req.body.kind : 'other';
+  const note = String(req.body?.note || '').trim().slice(0, 200);
+  const { rows } = await pool.query(
+    `INSERT INTO emergency_alerts (id, schema_name, user_id, user_name, user_phone, flat_number, kind, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [crypto.randomUUID(), req.schemaName, String(user.id), user.full_name || '', user.phone || '', user.flat_number || '', kind, note]
+  );
+  const alert = rows[0];
+  pool.query(`DELETE FROM emergency_alerts WHERE created_at < now() - interval '180 days'`).catch(() => {});
+
+  const staff = (await listEntity(req.schemaName, 'User')).filter((u) => isStaff(u) && !u.disabled).map((u) => u.id);
+  sendPushToUsers(req.schemaName, staff, {
+    title: `EMERGENCY: ${EMERGENCY_KINDS[kind]}`,
+    body: `Flat ${alert.flat_number || '-'}, ${alert.user_name || 'a resident'}${alert.user_phone ? ' (' + alert.user_phone + ')' : ''}${note ? '. ' + note : ''}`,
+    data: { type: 'emergency', url: '/Dashboard', alert_id: alert.id },
+    channelId: 'emergency',
+  });
+  res.status(201).json({ success: true, id: alert.id });
+}));
+
+// Guards and admins: alerts from the last hour (the app checks this every few seconds).
+app.get('/api/emergency/active', requireAuth, requireSocietySchema, wrap(async (req, res) => {
+  if (!isStaff(req.user)) return res.status(403).json({ message: 'Only security and admins can see emergency alerts' });
+  const { rows } = await pool.query(
+    `SELECT * FROM emergency_alerts
+      WHERE schema_name = $1 AND created_at > now() - interval '60 minutes'
+      ORDER BY created_at DESC LIMIT 20`,
+    [req.schemaName]
+  );
+  res.json(rows.map(alertRow));
+}));
+
+// Guards and admins: mark an alert as being handled (clears it for everyone).
+app.post('/api/emergency/:id/ack', requireAuth, requireSocietySchema, wrap(async (req, res) => {
+  if (!isStaff(req.user)) return res.status(403).json({ message: 'Only security and admins can do this' });
+  if (!isUuid(req.params.id)) return res.status(400).json({ message: 'Invalid alert' });
+  await pool.query(
+    `UPDATE emergency_alerts SET ack_by_name = $3, ack_at = now()
+      WHERE id = $1 AND schema_name = $2 AND ack_at IS NULL`,
+    [req.params.id, req.schemaName, req.user.full_name || req.user.email || 'Staff']
+  );
   res.json({ success: true });
 }));
 
