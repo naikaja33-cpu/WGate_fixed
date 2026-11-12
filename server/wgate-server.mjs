@@ -30,6 +30,7 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
+import PDFDocument from 'pdfkit';
 
 
 // dotenv's default `dotenv/config` import only reads a file named
