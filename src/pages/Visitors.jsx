@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter ,Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import AddVisitorForm from '@/components/visitors/AddVisitorForm';
+import ExportVisitorsDialog from '@/components/visitors/ExportVisitorsDialog';
 
 export default function Visitors() {
   const { user } = useAuth();
@@ -17,6 +18,7 @@ export default function Visitors() {
   const canAdd = isGuard || isAdmin;
 
   const [showForm, setShowForm] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const queryClient = useQueryClient();
 
@@ -68,6 +70,15 @@ export default function Visitors() {
           </Button>
         )}
       </div>
+
+            {isAdmin && (
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowExport(true)}>
+            <Download className="w-4 h-4 mr-1" /> Export CSV
+          </Button>
+        </div>
+      )}
+      <ExportVisitorsDialog open={showExport} onOpenChange={setShowExport} />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter}>
         <TabsList className="w-full bg-muted">

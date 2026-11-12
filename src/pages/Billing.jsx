@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2, Ruler, Landmark, Mail, Loader2 } from 'lucide-react';
+import { Plus, IndianRupee, TrendingUp, AlertCircle, CheckCircle2, Ruler, Landmark, Mail, Loader2 ,Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,6 +14,7 @@ import PayBillModal from '@/components/billing/PayBillModal';
 import PaymentSettingsModal from '@/components/billing/PaymentSettingsModal';
 import StatCard from '@/components/dashboard/StatCard';
 import { formatSqft, effectiveStatus, amountDue } from '@/lib/billing';
+import { saveFile } from '@/lib/saveFile';
 
 // Compact rupee amounts that keep their precision (2500 -> ₹2.5K, not ₹3k).
 const formatRupees = (amount) =>
@@ -29,6 +30,30 @@ export default function Billing() {
   const [showPaySettings, setShowPaySettings] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const queryClient = useQueryClient();
+  const [receiptBusyId, setReceiptBusyId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleReceipt = async (bill) => {
+    setReceiptBusyId(bill.id);
+    try {
+      await saveFile(await wgate.files.receipt(bill.id));
+    } catch (err) {
+      toast.error(err?.message || 'Could not create the receipt');
+    } finally {
+      setReceiptBusyId(null);
+    }
+  };
+
+  const handleExportBills = async () => {
+    setExporting(true);
+    try {
+      await saveFile(await wgate.files.bills());
+    } catch (err) {
+      toast.error(err?.message || 'Could not export the bills');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data: bills = [], isLoading } = useQuery({
     queryKey: ['bills'],
@@ -175,6 +200,9 @@ export default function Billing() {
         <h1 className="text-xl font-bold text-foreground">Maintenance Billing</h1>
         {isAdmin && (
           <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleExportBills} disabled={exporting} className="rounded-xl" aria-label="Export all bills to CSV" title="Export all bills to CSV">
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setShowSizes(true)} className="rounded-xl">
               <Ruler className="w-4 h-4 mr-1" /> Flat Sizes
             </Button>
@@ -268,7 +296,8 @@ export default function Billing() {
               payEnabled={!!payConfig} onPay={setPayingBill} onRejectClaim={handleRejectClaim}
               restrictDays={restrictDays}
               resident={residentByFlat[String(bill.flat_number ?? '').trim().toLowerCase()]}
-              onReminded={handleReminded} onToggleWaive={handleToggleWaive} />
+              onReminded={handleReminded} onToggleWaive={handleToggleWaive}
+              onReceipt={handleReceipt} receiptBusyId={receiptBusyId} />
           ))}
         </div>
       )}

@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, CheckCircle2, Clock, IndianRupee, Smartphone, MessageCircle, Lock } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, IndianRupee, Smartphone, MessageCircle, Lock,Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { effectiveStatus, lateFineFor, isLocked, lockDateFor, reminderMessage, whatsappReminderLink } from '@/lib/billing';
 
@@ -16,7 +16,7 @@ const statusStyles = {
  *  - onReminded:   called when the admin taps the WhatsApp reminder
  *  - onToggleWaive: admin allows (or re-locks) a flat that is locked out for this bill
  */
-export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay, onRejectClaim, restrictDays = 0, resident, onReminded, onToggleWaive }) {
+export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay, onRejectClaim, restrictDays = 0, resident, onReminded, onToggleWaive ,onReceipt, receiptBusyId}) {
   const status = effectiveStatus(bill);
   const fine = lateFineFor(bill);
   const fineConfigured = Math.round(Number(bill.late_fine) || 0);
@@ -96,6 +96,12 @@ export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay,
           </span>
         )}
       </div>
+
+          {status === 'paid' && onReceipt && (
+        <Button size="sm" variant="outline" className="w-full" disabled={receiptBusyId === bill.id} onClick={() => onReceipt(bill)}>
+          <Download className="w-4 h-4 mr-1" /> {receiptBusyId === bill.id ? 'Preparing...' : 'Download receipt (PDF)'}
+        </Button>
+      )}
 
       {/* Access lock: what the member sees */}
       {!isAdmin && lockRelevant && !bill.restriction_waived && (

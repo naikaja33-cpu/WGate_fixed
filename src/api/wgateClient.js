@@ -281,6 +281,17 @@ const push = {
     return request('/push/register', { method: 'POST', body: { token } });
   },
 };
+const files = {
+  receipt(id) {
+    return request(`/billing/${id}/receipt`);
+  },
+  bills() {
+    return request('/export/bills');
+  },
+  visitors(from, to) {
+    return request(`/export/visitors?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  },
+};
 const publicApi = {
   societies: {
        async byCode(code) {
@@ -390,6 +401,7 @@ export const ENTITY_NAMES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicke
 const entities = Object.fromEntries(ENTITY_NAMES.map((name) => [name, makeEntityClient(name)]));
 
 export const wgate = {
+  files,
   auth,
   users,
   entities,

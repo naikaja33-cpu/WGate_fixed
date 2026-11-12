@@ -948,7 +948,7 @@ async function duesBlocked(schemaName, user) {
 }
 
 // What a locked flat can still reach: sign-in/out, its bills, the UPI details and flat size.
-const DUES_ALLOWED = /^\/api\/(auth\/|emergency|push\/|entities\/(MaintenanceBill|PaymentConfig|FlatArea|SocietySettings)(\/|\?|$))/;
+const DUES_ALLOWED = /^\/api\/(auth\/|emergency|push\/|billing\/|entities\/(MaintenanceBill|PaymentConfig|FlatArea|SocietySettings)(\/|\?|$))/;
 
 async function requireAuth(req, res, next) {
   try {
@@ -1233,6 +1233,11 @@ app.use(compression({
 app.use(express.json({ limit: '10mb' }));
 
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+
+// A light check for the uptime monitor. It does not touch the database, so Neon can still sleep.
+app.get('/api/ping', (_req, res) => {
+  res.json({ ok: true });
+});
 
 app.get('/api/health', wrap(async (_req, res) => {
   await pool.query('SELECT 1');
@@ -2256,6 +2261,181 @@ app.get('/api/flats/:flat/contacts', requireAuth, requireSocietySchema, wrap(asy
     .filter((u) => !u.disabled && ['owner', 'tenant', 'family'].includes(u.role) && flatKey(u.flat_number) === flat && u.phone)
     .map((u) => ({ name: u.full_name || '', role: u.role, phone: u.phone }));
   res.json(contacts);
+}));
+
+/* ------------------------- PDF receipts and CSV export ------------------------- */
+
+const exportLimit = rateLimit({
+  windowMs: HOUR, max: 30, keyFn: (req) => `export:${req.user?.id || clientIp(req)}`,
+  message: 'You have exported several times already. Please try again in a while.',
+});
+const receiptLimit = rateLimit({
+  windowMs: HOUR, max: 60, keyFn: (req) => `receipt:${req.user?.id || clientIp(req)}`,
+  message: 'You have downloaded many receipts already. Please try again in a while.',
+});
+
+const receiptNo = (bill) => `R-${String(bill.id).replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+const istToday = () => new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+const istDay = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+};
+const istTime = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' });
+};
+const rupees = (n) => 'Rs. ' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// The standard PDF font has no Hindi letters; anything it cannot draw becomes a question mark.
+const pdfText = (v) => String(v ?? '').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '?');
+const safeName = (s) => String(s || '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'file';
+
+function buildReceiptPdf(society, bill) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50, info: { Title: `Receipt ${receiptNo(bill)}`, Author: pdfText(society.name || 'WGate') } });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const L = 50;
+    const W = 495;
+    const base = Number(bill.amount) || 0;
+    const fine = Math.round(Number(bill.fine_applied) || 0);
+    const total = Number(bill.amount_paid ?? base + fine) || 0;
+
+    doc.fillColor('#111111').font('Helvetica-Bold').fontSize(18).text(pdfText(society.name || 'Society'), L, 50, { width: W, align: 'center' });
+    const addr = [society.address, society.city].filter(Boolean).join(', ');
+    if (addr) doc.font('Helvetica').fontSize(10).fillColor('#555555').text(pdfText(addr), { width: W, align: 'center' });
+    doc.moveDown(1);
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#047857').text('PAYMENT RECEIPT', { width: W, align: 'center' });
+    doc.moveTo(L, doc.y + 6).lineTo(L + W, doc.y + 6).strokeColor('#dddddd').stroke();
+    doc.moveDown(1.2);
+
+    const row = (label, value, bold = false) => {
+      const y = doc.y;
+      doc.font('Helvetica').fontSize(11).fillColor('#666666').text(label, L, y, { width: 150 });
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor('#111111').text(pdfText(value), L + 160, y, { width: W - 160 });
+      doc.moveDown(0.5);
+    };
+    row('Receipt no.', receiptNo(bill), true);
+    row('Date paid', istDay(bill.paid_date));
+    row('Flat', bill.flat_number, true);
+    row('Received from', bill.resident_name || bill.resident_email || '-');
+    row('Bill for', bill.month_label || bill.month || '-');
+    row('Payment mode', bill.payment_mode ? String(bill.payment_mode).replace(/_/g, ' ') : '-');
+    if (bill.transaction_id) row('Transaction ID', bill.transaction_id);
+
+    doc.moveDown(0.8);
+    doc.moveTo(L, doc.y).lineTo(L + W, doc.y).strokeColor('#dddddd').stroke();
+    doc.moveDown(0.8);
+
+    const money = (label, value, { bold = false, size = 11, color = '#111111' } = {}) => {
+      const y = doc.y;
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color).text(pdfText(label), L, y, { width: 330 });
+      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color).text(rupees(value), L + 330, y, { width: W - 330, align: 'right' });
+      doc.moveDown(0.5);
+    };
+    money('Maintenance charges', base);
+    if (bill.area_sqft > 0 && bill.rate_per_sqft > 0) {
+      doc.font('Helvetica').fontSize(9).fillColor('#777777').text(
+        `${Number(bill.area_sqft).toLocaleString('en-IN')} sq ft x Rs. ${Number(bill.rate_per_sqft).toLocaleString('en-IN')} per sq ft`, L, doc.y, { width: W });
+      doc.moveDown(0.4);
+    }
+    if (Array.isArray(bill.line_items)) {
+      for (const item of bill.line_items) money(`  ${item.label || 'Charge'}`, item.amount, { size: 10, color: '#555555' });
+    }
+    if (fine > 0) money('Late fine', fine);
+    doc.moveDown(0.3);
+    doc.moveTo(L, doc.y).lineTo(L + W, doc.y).strokeColor('#dddddd').stroke();
+    doc.moveDown(0.6);
+    money('Total paid', total, { bold: true, size: 14, color: '#047857' });
+
+    doc.moveDown(3);
+    doc.font('Helvetica').fontSize(9).fillColor('#888888')
+      .text('This is a computer-generated receipt and does not need a signature.', L, doc.y, { width: W, align: 'center' })
+      .text(`Generated on ${istDay(new Date())} by WGate`, { width: W, align: 'center' });
+    doc.end();
+  });
+}
+
+// Members download the receipt for their own paid bills; the admin can download any.
+app.get('/api/billing/:id/receipt', requireAuth, requireSocietySchema, receiptLimit, wrap(async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ message: 'Bill not found' });
+  const bill = await getEntityRecord(req.schemaName, 'MaintenanceBill', req.params.id);
+  if (!bill || !canRead(req.user, 'MaintenanceBill', bill)) return res.status(404).json({ message: 'Bill not found' });
+  if (bill.status !== 'paid') return res.status(409).json({ message: 'A receipt is available once the bill is paid' });
+  const pdf = await buildReceiptPdf(req.society, bill);
+  res.json({
+    filename: `Receipt-${safeName(bill.flat_number)}-${safeName(bill.month || bill.month_label)}.pdf`,
+    mime: 'application/pdf',
+    data: pdf.toString('base64'),
+  });
+}));
+
+// Excel opens a CSV correctly in UTF-8 when it starts with a byte-order mark. Cells that start
+// with = + - @ get a leading apostrophe so a spreadsheet never runs them as a formula.
+const csvCell = (v) => {
+  let s = v === null || v === undefined ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+const sendCsv = (res, filename, header, rows) => {
+  const text = '\uFEFF' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  res.json({ filename, mime: 'text/csv', data: Buffer.from(text, 'utf8').toString('base64') });
+};
+
+// Admin: every bill of the society.
+app.get('/api/export/bills', requireAuth, requireAdmin, requireSocietySchema, exportLimit, wrap(async (req, res) => {
+  const today = istToday();
+  const bills = await listEntity(req.schemaName, 'MaintenanceBill');
+  bills.sort((a, b) =>
+    String(b.month || '').localeCompare(String(a.month || '')) ||
+    String(a.flat_number || '').localeCompare(String(b.flat_number || ''), undefined, { numeric: true }));
+  const header = ['Flat', 'Resident', 'Email', 'Month', 'Due date', 'Amount (Rs)', 'Late fine (Rs)', 'Total paid (Rs)', 'Status', 'Paid date', 'Payment mode', 'Transaction ID', 'Receipt no'];
+  const rows = bills.slice(0, 20000).map((b) => {
+    const paid = b.status === 'paid';
+    const due = b.due_date ? String(b.due_date).slice(0, 10) : '';
+    const status = paid ? 'paid' : (b.status === 'overdue' || (due && due < today) ? 'overdue' : 'pending');
+    const fine = Math.round(Number(b.fine_applied) || 0);
+    return [
+      b.flat_number, b.resident_name, b.resident_email, b.month_label || b.month, due,
+      Number(b.amount) || 0,
+      paid ? fine : '',
+      paid ? (Number(b.amount_paid ?? (Number(b.amount) || 0) + fine) || 0) : '',
+      status,
+      paid ? String(b.paid_date || '').slice(0, 10) : '',
+      paid ? String(b.payment_mode || '').replace(/_/g, ' ') : '',
+      paid ? (b.transaction_id || '') : '',
+      paid ? receiptNo(b) : '',
+    ];
+  });
+  sendCsv(res, `Bills-${today}.csv`, header, rows);
+}));
+
+// Admin: visitors between two dates (default: the last 30 days).
+app.get('/api/export/visitors', requireAuth, requireAdmin, requireSocietySchema, exportLimit, wrap(async (req, res) => {
+  const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+  const to = isDay(req.query.to) ? String(req.query.to) : istToday();
+  const from = isDay(req.query.from)
+    ? String(req.query.from)
+    : new Date(Date.parse(`${to}T00:00:00Z`) - 29 * 86400000).toISOString().slice(0, 10);
+  if (from > to) return res.status(400).json({ message: 'The From date must be on or before the To date' });
+  const { rows: found } = await pool.query(
+    `SELECT data FROM "${req.schemaName}".entity_records
+      WHERE entity = 'Visitor' AND created_date >= $1::timestamptz AND created_date < $2::timestamptz
+      ORDER BY created_date DESC LIMIT 20000`,
+    [`${from}T00:00:00+05:30`, new Date(Date.parse(`${to}T00:00:00+05:30`) + 86400000).toISOString()]
+  );
+  const header = ['Date', 'Check-in time', 'Check-out time', 'Visitor', 'Phone', 'Purpose', 'Flat', 'Vehicle', 'Status'];
+  const rows = found.map(({ data: v }) => [
+    istDay(v.check_in_time || v.created_date), istTime(v.check_in_time || v.created_date), istTime(v.check_out_time),
+    v.visitor_name, v.visitor_phone, v.purpose, v.flat_number, v.vehicle_number, v.status,
+  ]);
+  sendCsv(res, `Visitors-${from}-to-${to}.csv`, header, rows);
 }));
 
 /* ------------------------- payment reminders ------------------------- */
