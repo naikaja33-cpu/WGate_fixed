@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "1.11",
+  "versionCode": 12,
+  "versionName": "1.12",
   "minVersionCode": 10,
-  "notes": "push notifications for visitors"
+  "notes": "emergency button and alerts added"
 }
