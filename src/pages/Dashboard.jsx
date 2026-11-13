@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Wrench, Clock, CheckCircle2, Bell, BellRing, ChevronRight } from 'lucide-react';
+import { Users, Wrench, Clock, CheckCircle2, Bell, BellRing, ChevronRight, AlertTriangle, CalendarClock, UserCheck, KeyRound, LayoutGrid, LayoutList } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import HomeTabs from '@/components/dashboard/HomeTabs';
 import VisitorCard from '@/components/visitors/VisitorCard';
@@ -10,9 +10,30 @@ import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Link } from 'react-router-dom';
 import { useEnabledMenus } from '@/lib/useEnabledMenus';
+import { useHomeStyle } from '@/lib/homeStyle';
 import { effectiveStatus } from '@/lib/billing';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
+// A shortcut card used by the classic home page.
+function QuickLink({ to, icon: Icon, title, sub }) {
+  return (
+    <Link
+      to={to}
+      className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+    >
+      <div className="flex items-center justify-between">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+          <Icon className="w-4 h-4 text-primary" />
+        </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+      </div>
+      <div>
+        <p className="font-semibold text-foreground text-sm">{title}</p>
+        <p className="text-xs text-muted-foreground">{sub}</p>
+      </div>
+    </Link>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -20,6 +41,10 @@ export default function Dashboard() {
   const isAdmin = role === 'admin';
   const isStaff = isAdmin || role === 'guard';
   const isResident = role === 'owner' || role === 'tenant' || role === 'family';
+
+  // Two looks: the tabs home (default) or the classic home. Guards always use the tabs home.
+  const [homeStyle, setHomeStyle] = useHomeStyle();
+  const classic = homeStyle === 'classic' && role !== 'guard';
 
   // Sections the super admin has switched off are neither fetched nor shown.
   const { isEnabled } = useEnabledMenus();
@@ -52,14 +77,14 @@ export default function Dashboard() {
     enabled: !!user && showTickets,
   });
 
-  // Same request as the Billing page, so the two share one cached answer.
+  // Same request as the Billing page, so the two share one cached answer. Only the tabs home shows it.
   const { data: bills = [] } = useQuery({
     queryKey: ['bills'],
     queryFn: () => {
       if (isAdmin) return wgate.entities.MaintenanceBill.list('-created_date', 200);
       return wgate.entities.MaintenanceBill.filter({ flat_number: user.flat_number }, '-created_date', 50);
     },
-    enabled: !!user && showBilling,
+    enabled: !!user && showBilling && !classic,
   });
 
   const pendingVisitors = visitors.filter(v => v.status === 'pending');
@@ -99,19 +124,54 @@ export default function Dashboard() {
 
   const waiting = pendingVisitors.length;
 
+  // The count cards: everyone sees them on the classic home; on the tabs home only the admin does.
+  const showStats = (classic || isAdmin) && (showVisitors || showTickets);
+  const statCards = showStats && (
+    <div className="grid grid-cols-2 gap-3">
+      {showVisitors && (
+        <StatCard title="Pending Visitors" value={waiting} icon={Users} color="bg-amber-100 text-amber-600" />
+      )}
+      {showTickets && (
+        <StatCard title="Open Tickets" value={openTickets.length} icon={Wrench} color="bg-blue-100 text-blue-600" />
+      )}
+      {showVisitors && (
+        <StatCard title="Today's Visitors" value={visitors.filter(v => {
+          if (!v.check_in_time) return false;
+          return new Date(v.check_in_time).toDateString() === new Date().toDateString();
+        }).length} icon={Clock} color="bg-emerald-100 text-emerald-600" />
+      )}
+      {showTickets && (
+        <StatCard title="Resolved" value={tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length} icon={CheckCircle2} color="bg-purple-100 text-purple-600" />
+      )}
+    </div>
+  );
+
   return (
     <div className="p-4 space-y-5 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Hello, {user?.full_name?.split(' ')[0] || 'there'} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {isAdmin ? `${user?.society_name || 'Society'} Society` : isResident ? `Flat ${user?.flat_number || '—'}` : (user?.society_name || '')}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-foreground">
+            Hello, {user?.full_name?.split(' ')[0] || 'there'} 👋
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isAdmin ? `${user?.society_name || 'Society'} Society` : isResident ? `Flat ${user?.flat_number || '—'}` : (user?.society_name || '')}
+          </p>
+        </div>
+        {role !== 'guard' && (
+          <button
+            type="button"
+            onClick={() => setHomeStyle(classic ? 'tabs' : 'classic')}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground"
+            aria-label={classic ? 'Switch to the tabs view' : 'Switch to the classic view'}
+          >
+            {classic ? <LayoutGrid className="h-4 w-4" /> : <LayoutList className="h-4 w-4" />}
+            {classic ? 'Tabs view' : 'Classic view'}
+          </button>
+        )}
       </div>
 
-      {/* The most urgent thing is always on top: someone is waiting at the gate. */}
-      {showVisitors && waiting > 0 && (
+      {/* The most urgent thing is always on top in the tabs view: someone is waiting at the gate. */}
+      {!classic && showVisitors && waiting > 0 && (
         <div className="flex items-center gap-3 rounded-2xl bg-red-600 p-4 text-white shadow-md">
           <BellRing className="h-6 w-6 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -136,30 +196,23 @@ export default function Dashboard() {
         </div>
       )}
 
-      <HomeTabs
-        role={role}
-        isEnabled={isEnabled}
-        counts={{ visitors: waiting, tickets: openTickets.length, bills: billCount }}
-      />
+      {/* Count cards sit above the tabs (admin) or at the top of the classic home. */}
+      {statCards}
 
-      {isAdmin && (showVisitors || showTickets) && (
-        <div className="grid grid-cols-2 gap-3">
-          {showVisitors && (
-            <StatCard title="Pending Visitors" value={waiting} icon={Users} color="bg-amber-100 text-amber-600" />
-          )}
-          {showTickets && (
-            <StatCard title="Open Tickets" value={openTickets.length} icon={Wrench} color="bg-blue-100 text-blue-600" />
-          )}
-          {showVisitors && (
-            <StatCard title="Today's Visitors" value={visitors.filter(v => {
-              if (!v.check_in_time) return false;
-              return new Date(v.check_in_time).toDateString() === new Date().toDateString();
-            }).length} icon={Clock} color="bg-emerald-100 text-emerald-600" />
-          )}
-          {showTickets && (
-            <StatCard title="Resolved" value={tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length} icon={CheckCircle2} color="bg-purple-100 text-purple-600" />
-          )}
-        </div>
+      {classic ? (
+        (isEnabled('PreApprovals') || isEnabled('GatePasses') || isEnabled('Amenities')) && (
+          <div className="grid grid-cols-2 gap-3">
+            {isEnabled('Amenities') && <QuickLink to="/Amenities" icon={CalendarClock} title="Amenities" sub="Book a slot" />}
+            {isEnabled('PreApprovals') && <QuickLink to="/PreApprovals" icon={UserCheck} title="Pre-Approve" sub="Guest / Maid / Cook" />}
+            {isEnabled('GatePasses') && <QuickLink to="/GatePasses" icon={KeyRound} title="Gate Pass" sub="One-time entry code" />}
+          </div>
+        )
+      ) : (
+        <HomeTabs
+          role={role}
+          isEnabled={isEnabled}
+          counts={{ visitors: waiting, tickets: openTickets.length, bills: billCount }}
+        />
       )}
 
       {showNotices && notices.length > 0 && (
@@ -177,6 +230,21 @@ export default function Dashboard() {
         </div>
       )}
 
+      {classic && showVisitors && waiting > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Pending Approvals
+            </h2>
+            <Link to="/Visitors" className="text-sm text-primary font-medium">View all →</Link>
+          </div>
+          {pendingVisitors.slice(0, 3).map(v => (
+            <VisitorCard key={v.id} visitor={v} showActions={false} />
+          ))}
+        </div>
+      )}
+
       {showTickets && role !== 'family' && openTickets.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -187,6 +255,16 @@ export default function Dashboard() {
             <TicketCard key={t.id} ticket={t} isAdmin={false} />
           ))}
         </div>
+      )}
+
+      {classic && isAdmin && (
+        <Link
+          to="/Members"
+          className="flex flex-col gap-2 bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors"
+        >
+          <span className="font-medium text-sm">Manage society members</span>
+          <span className="text-xs text-primary font-medium">Open →</span>
+        </Link>
       )}
 
       {popupVisitor && (

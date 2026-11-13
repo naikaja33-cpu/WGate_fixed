@@ -1,9 +1,10 @@
 import { Suspense } from 'react';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Wrench, User, Shield, LogOut, IndianRupee, Bell, CalendarClock, UserCheck, KeyRound } from 'lucide-react';
+import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell, CalendarClock, UserCheck, KeyRound, Store } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
+import { useHomeStyle } from '@/lib/homeStyle';
 
 // Residents and the admin get five big buttons. The other pages (Pre-Approve, Gate Pass, Amenities,
 // Notices, Community, Members) are reached from the tabs on the Home screen. `match` lists the pages
@@ -37,13 +38,31 @@ const navItems = {
   ],
 };
 
+// The classic bar: every page has its own button.
+const classicItems = [
+  { path: '/Dashboard', icon: LayoutDashboard, label: 'Home' },
+  { path: '/Community', icon: Store, label: 'Community' },
+  { path: '/Visitors', icon: Users, label: 'Visitors' },
+  { path: '/ServiceTickets', icon: Wrench, label: 'Tickets' },
+  { path: '/NoticeBoard', icon: Bell, label: 'Notices' },
+  { path: '/Billing', icon: IndianRupee, label: 'Billing' },
+  { path: '/Profile', icon: User, label: 'Profile' },
+];
+const classicNavItems = {
+  admin: [...classicItems.slice(0, 6), { path: '/Members', icon: UserCog, label: 'Members' }, classicItems[6]],
+  tenant: classicItems,
+  owner: classicItems,
+};
+
 export default function AppLayout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const role = user?.role || 'resident';
   const { enabledMenus, isLoaded } = useEnabledMenus();
 
-  const baseItems = navItems[role] || navItems.tenant;
+  // People can switch the Home screen between the tabs look and the classic look.
+  const [homeStyle] = useHomeStyle();
+  const baseItems = (homeStyle === 'classic' && classicNavItems[role]) || navItems[role] || navItems.tenant;
   // The super admin decides which menus a society can use. This applies to
   // everyone in the society, including its admin. Home, Profile and Members
   // are always visible.
