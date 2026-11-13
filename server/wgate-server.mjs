@@ -640,7 +640,8 @@ function baseRecord(extra = {}) {
 
 async function seedIfEmpty() {
   const { rows: societyCountRows } = await pool.query('SELECT COUNT(*)::int AS n FROM societies');
-  if (societyCountRows[0].n === 0) {
+  // The demo society and its sample accounts (admin123, guard123 and so on) are for local testing only.
+  if (societyCountRows[0].n === 0 && process.env.SEED_DEMO_DATA === 'true') {
     const society = await createSocietyRecord({
       name: 'Green Valley Residency',
       address: '12, Lake View Road',
@@ -740,11 +741,18 @@ async function seedIfEmpty() {
 
   const { rows: saCountRows } = await pool.query('SELECT COUNT(*)::int AS n FROM superadmins');
   if (saCountRows[0].n === 0) {
-    await pool.query(
-      `INSERT INTO superadmins (id, email, password_hash, full_name, must_change_password) VALUES ($1,$2,$3,$4,true)`,
-      [newId(), 'superadmin@wgate.local', hashPassword('super123'), 'Super Admin']
-    );
-    console.log('[wgate-api] Seeded superadmin account.');
+    // A brand-new database gets a super admin only when you choose its sign-in yourself.
+    const saEmail = String(process.env.SUPERADMIN_EMAIL || '').trim().toLowerCase();
+    const saPassword = String(process.env.SUPERADMIN_PASSWORD || '');
+    if (saEmail && saPassword.length >= 10) {
+      await pool.query(
+        `INSERT INTO superadmins (id, email, password_hash, full_name, must_change_password) VALUES ($1,$2,$3,$4,true)`,
+        [newId(), saEmail, hashPassword(saPassword), 'Super Admin']
+      );
+      console.log('[wgate-api] Created the super admin from SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD.');
+    } else {
+      console.log('[wgate-api] No super admin exists. Set SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD (10 or more characters) to create one.');
+    }
   }
 }
 
@@ -908,7 +916,8 @@ async function resolveSessionFromDb(token) {
 function bearerToken(req) {
   const header = req.headers.authorization || '';
   if (header.toLowerCase().startsWith('bearer ')) return header.slice(7).trim();
-  if (typeof req.query.token === 'string') return req.query.token; // EventSource cannot set headers
+  // Only the live-updates stream may carry the token in the address (a browser's EventSource cannot set headers).
+  if (typeof req.query.token === 'string' && req.originalUrl.split('?')[0] === '/api/events') return req.query.token;
   return null;
 }
 
@@ -1232,6 +1241,17 @@ app.use(compression({
 }));
 app.use(express.json({ limit: '10mb' }));
 
+// A safety net on top of the per-route limits: one signed-in account cannot pull data non-stop
+// (for example a stolen token running a scraper). Normal use stays far below this.
+const accountApiLimit = rateLimit({
+  windowMs: 5 * 60 * 1000, max: 900, keyFn: (req) => `api:${sha256(bearerToken(req) || '')}`,
+  message: 'Too many requests. Please slow down for a moment.',
+});
+app.use('/api', (req, res, next) => {
+  if (!bearerToken(req) || req.originalUrl.split('?')[0] === '/api/events') return next();
+  return accountApiLimit(req, res, next);
+});
+
 const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 // A light check for the uptime monitor. It does not touch the database, so Neon can still sleep.
@@ -1350,8 +1370,8 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });
   const password = req.body?.password;
-  if (!password || String(password).length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  if (!password || String(password).length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters' });
   }
     if (!isValidPhone(req.body?.phone)) {
     return res.status(400).json({ message: 'Enter a valid phone number' });
@@ -1570,10 +1590,13 @@ app.post('/api/auth/change-password', requireAuth, changePasswordLimit, wrap(asy
   if (!verifyPassword(current, req.user.password_hash)) {
     return res.status(400).json({ message: 'Current password is incorrect' });
   }
-  if (!next || String(next).length < 6) {
-    return res.status(400).json({ message: 'New password must be at least 6 characters' });
+  if (!next || String(next).length < 8) {
+    return res.status(400).json({ message: 'New password must be at least 8 characters' });
   }
   const newHash = hashPassword(next);
+  // Changing the password signs this account out of every other phone and browser.
+  await pool.query('DELETE FROM sessions WHERE user_id = $1 AND id <> $2', [req.user.id, req.session.id]);
+  authCache.clear();
 
   if (!req.schemaName) {
     await pool.query(
@@ -2910,6 +2933,20 @@ async function authorizeCreate(req, res, entity, input) {
     if (user.role !== 'guard') return denyWrite(res, 'Only security and admins can check in visitors');
     delete body.check_out_time;
 
+    // Keep only the fields the visitor form has, and check their size, so nothing else can be stored.
+    const allowedFields = ['visitor_name', 'visitor_phone', 'purpose', 'flat_number', 'vehicle_number', 'notes', 'photo', 'check_in_time', 'status'];
+    for (const key of Object.keys(body)) if (!allowedFields.includes(key)) delete body[key];
+    const badVisitor = (message) => { res.status(400).json({ message }); return null; };
+    const visitorName = String(body.visitor_name || '').trim();
+    if (!visitorName || visitorName.length > 60) return badVisitor('Enter the visitor name (up to 60 letters)');
+    if (String(body.purpose || '').length > 30 || String(body.flat_number || '').length > 20 ||
+        String(body.vehicle_number || '').length > 20 || String(body.notes || '').length > 300) {
+      return badVisitor('One of the visitor details is too long');
+    }
+    if (body.photo !== undefined && (typeof body.photo !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(body.photo) || body.photo.length > 1500000)) {
+      return badVisitor('The visitor photo is not valid');
+    }
+
     // Skip the resident-approval wait when there's an active, currently
     // valid pre-approval for this phone number — the whole point of
     // pre-approving a recurring maid/cook/nanny or an expected guest.
@@ -3492,7 +3529,9 @@ app.use('/api', (_req, res) => res.status(404).json({ message: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error('[wgate-api] Unhandled error:', err);
-  res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
+  const status = err.status || 500;
+  // Server faults get a plain message; the real reason stays in the Render logs.
+  res.status(status).json({ message: status >= 500 ? 'Something went wrong. Please try again.' : (err.message || 'Request failed') });
 });
 
 /* ------------------------------------------------------------------ */

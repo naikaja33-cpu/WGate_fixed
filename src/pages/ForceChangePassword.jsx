@@ -19,8 +19,8 @@ export default function ForceChangePassword() {
     e.preventDefault();
     setError('');
 
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -76,7 +76,7 @@ export default function ForceChangePassword() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
           />
         </div>
 

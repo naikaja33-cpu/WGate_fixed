@@ -40,7 +40,7 @@ const [agreed, setAgreed] = useState(false);
     if (!form.society_name.trim()) return setError('Society name is required');
     //if (!agreed) return setError('Please accept the Privacy Policy to continue');
     if (!form.email.trim()) return setError('Email is required');
-    if (!form.password || form.password.length < 6) return setError('Password must be at least 6 characters');
+  if (!form.password || form.password.length < 8) return setError('Password must be at least 8 characters');
     if (form.phone && (form.phone.length < 10 || form.phone.length > 10)) return setError('Enter a valid phone number');
 
     setIsSubmitting(true);
@@ -155,7 +155,7 @@ const [agreed, setAgreed] = useState(false);
               value={form.password}
               onChange={setField('password')}
               required
-              minLength={6}
+              minLength={8}
             />
           </div>
         </div>

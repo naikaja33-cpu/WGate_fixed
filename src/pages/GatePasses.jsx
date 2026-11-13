@@ -107,6 +107,10 @@ export default function GatePasses() {
       setFormError('Visitor name is required');
       return;
     }
+    if (form.visitor_phone && form.visitor_phone.replace(/\D/g, '').length !== 10) {
+      setFormError('Enter a valid 10-digit phone number');
+      return;
+    }
     createMutation.mutate(form);
   };
 
@@ -197,8 +201,9 @@ export default function GatePasses() {
               <Label>Phone (optional)</Label>
               <Input
                 value={form.visitor_phone}
-                onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 15) }))}
-                placeholder="Phone number (optional)"
+              onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                maxLength={10}
+                placeholder="10-digit phone number (optional)"
                 inputMode="numeric"
               />
             </div>

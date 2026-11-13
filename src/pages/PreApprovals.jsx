@@ -82,7 +82,7 @@ export default function PreApprovals() {
       return;
     }
     const phoneDigits = form.visitor_phone.replace(/\D/g, '');
-    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+    if (phoneDigits.length !== 10) {
       setFormError('Enter a valid phone number');
       return;
     }
@@ -146,8 +146,9 @@ export default function PreApprovals() {
               <Label>Phone number</Label>
               <Input
                 value={form.visitor_phone}
-                onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 15) }))}
-                placeholder="Phone number (with country code if not Indian)"
+              onChange={(e) => setForm((f) => ({ ...f, visitor_phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                maxLength={10}
+                placeholder="10-digit phone number"
                 inputMode="numeric"
                 required
               />

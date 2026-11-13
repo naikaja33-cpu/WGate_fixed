@@ -22,7 +22,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, '..', '.env.local') });
 
 const email = (process.argv[2] || 'superadmin@wgate.local').trim().toLowerCase();
-const password = process.argv[3] || 'super123';
+const password = process.argv[3] || '';
+if (password.length < 10) {
+  console.error('Usage: node server/create-superadmin.mjs <email> <password of 10 or more characters>');
+  process.exit(1);
+}
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is not set — put it in .env.local or set it in your environment.');

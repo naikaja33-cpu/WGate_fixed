@@ -1,3 +1,12 @@
 node_modules/
 dist/
-.env.local
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+google-services.json.bak
+*.keystore
+*.jks
+serviceAccount*.json
+*firebase-adminsdk*.json
