@@ -41,6 +41,9 @@ const SECTIONS = [
       'To manage the gate: tell you when a visitor or delivery is waiting and record your approval or rejection.',
       'To run society features: notices, tickets, bookings, billing and the community board.',
       'To send you messages about your account and dues, such as a password reset or a payment reminder by email or WhatsApp.',
+      'To send push notifications to your phone, such as a visitor waiting at the gate.',
+      'To send push notifications to your phone, such as a visitor waiting at the gate.',
+      'To let you send an emergency alert to your society\'s security and admin. The alert includes your name, flat number and phone number.',
       'To keep the service secure, prevent misuse and fix faults.',
       'To meet legal obligations.',
     ],
@@ -122,7 +125,7 @@ const SECTIONS = [
   {
     title: '12. Information stored on your device',
     body: [
-      'WGate keeps a sign-in token and your society selection on your device so you stay signed in and do not have to choose your society each time. We do not use advertising or analytics cookies. You can clear this by signing out or clearing the app or browser data.',
+      'WGate keeps a sign-in token and your society selection on your device so you stay signed in and do not have to choose your society each time. We do not use advertising or analytics cookies. You can clear this by signing out or clearing the app or browser data. If you turn on notifications, we also keep a notification token for your phone (issued by Google Firebase Cloud Messaging) so we can send alerts to it; it stops being used when you sign out. If you turn on notifications, we also keep a notification token for your phone (issued by Google Firebase Cloud Messaging) so we can send alerts to it; it stops being used when you sign out.',
     ],
   },
   {
