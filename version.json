@@ -2,5 +2,5 @@
   "versionCode": 15,
   "versionName": "1.15",
   "minVersionCode": 10,
-  "notes": "PDF receipts and CSV export"
+  "notes": "Bug fix"
 }
