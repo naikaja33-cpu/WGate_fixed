@@ -52,6 +52,9 @@ const Amenities = lazy(() => import('@/pages/Amenities'));
 const PreApprovals = lazy(() => import('@/pages/PreApprovals'));
 const GatePasses = lazy(() => import('@/pages/GatePasses'));
 const Home = lazy(() => import('@/pages/Home'));
+const AboutUs = lazy(() => import('@/pages/AboutUs'));
+const ContactUs = lazy(() => import('@/pages/ContactUs'));
+const FAQ = lazy(() => import('@/pages/FAQ'));
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
@@ -75,6 +78,9 @@ const AuthenticatedApp = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/s/:code" element={<Login />} />
          <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/about" element={<AboutUs />} />
+        <Route path="/contact" element={<ContactUs />} />
+        <Route path="/faq" element={<FAQ />} />
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="*" element={isNative ? <Login /> : <Navigate to="/" replace />} />
@@ -109,6 +115,9 @@ const AuthenticatedApp = () => {
             <Route path="/signup" element={<Navigate to="/Dashboard" replace />} />
       <Route path="/s/:code" element={<Navigate to="/Dashboard" replace />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/about" element={<AboutUs />} />
+      <Route path="/contact" element={<ContactUs />} />
+      <Route path="/faq" element={<FAQ />} />
       <Route element={<AppLayout />}>
         <Route path="/Dashboard" element={<Dashboard />} />
         <Route path="/Visitors" element={<Visitors />} />

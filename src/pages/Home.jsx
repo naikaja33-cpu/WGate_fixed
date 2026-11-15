@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield,Download ,Smartphone, Apple} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import SiteFooter from '@/components/SiteFooter';
+import WhatsAppChat from '@/components/WhatsAppChat';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -109,6 +111,8 @@ export default function Home() {
       {/* <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
         <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
       </footer> */}
+            <SiteFooter />
+      <WhatsAppChat />
     </div>
   );
 }
