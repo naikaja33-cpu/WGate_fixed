@@ -61,7 +61,7 @@ export default function UpdateBanner() {
 
   return (
     <div
-      className="fixed top-0 inset-x-0 z-[60] bg-primary text-primary-foreground shadow-md"
+      className="relative z-[60] bg-primary text-primary-foreground shadow-md"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3">

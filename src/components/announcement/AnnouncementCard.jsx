@@ -63,6 +63,30 @@ export default function AnnouncementCard() {
     setSaving(false);
   };
 
+  // The On/Off switch saves straight away. Before, it only changed the form on screen,
+  // so a refresh brought the old setting back.
+  const handleToggle = async (value) => {
+    const previous = !!form.enabled;
+    set('enabled', value);
+    setSaving(true);
+    try {
+      const saved = await wgate.superadmin.saveAnnouncement({
+        enabled: value,
+        theme: form.theme,
+        title: form.title,
+        message: form.message,
+        start_date: form.start_date || '',
+        end_date: form.end_date || '',
+      });
+      setForm(saved);
+      toast.success(saved.enabled ? 'Banner is ON. Everyone will see it when they next open the app.' : 'Banner is OFF.');
+    } catch (e) {
+      set('enabled', previous);
+      toast.error(e?.message || 'Could not change the banner');
+    }
+    setSaving(false);
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -70,7 +94,7 @@ export default function AnnouncementCard() {
           <CardTitle className="text-base">Welcome / Festival Banner</CardTitle>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{form.enabled ? 'On' : 'Off'}</span>
-            <Switch checked={!!form.enabled} onCheckedChange={(v) => set('enabled', v)} />
+           <Switch checked={!!form.enabled} disabled={saving} onCheckedChange={handleToggle} />
           </div>
         </div>
                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">

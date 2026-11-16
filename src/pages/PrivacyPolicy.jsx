@@ -67,26 +67,23 @@ const SECTIONS = [
     ],
     after: 'Each society\'s information is kept separate from every other society\'s. People in one society cannot see another society\'s information.',
   },
+  // {
+  //   title: '6. Who else we share it with',
+  //   body: ['We use trusted service providers to run WGate. They may process your information only for us, and only to provide their service:'],
+  //   list: [
+  //     'Neon: database hosting (where your information is stored).',
+
+  //   ],
+  //   after: 'The Call and WhatsApp buttons in the app open your own phone or WhatsApp. Messages sent that way are covered by WhatsApp\'s own terms. We may also share information when the law requires it, for example by a court or government order, and to protect people\'s safety. We do not sell your information.',
+  // },
   {
-    title: '6. Who else we share it with',
-    body: ['We use trusted service providers to run WGate. They may process your information only for us, and only to provide their service:'],
-    list: [
-      'Neon: database hosting (where your information is stored).',
-      'Render: hosting of the WGate server.',
-      'GitHub Pages: hosting of the WGate website.',
-      'Google (Apps Script and Gmail): sending emails such as invitations and reminders.',
-      'Twilio (if switched on for your society): sending WhatsApp messages.',
-    ],
-    after: 'The Call and WhatsApp buttons in the app open your own phone or WhatsApp. Messages sent that way are covered by WhatsApp\'s own terms. We may also share information when the law requires it, for example by a court or government order, and to protect people\'s safety. We do not sell your information.',
-  },
-  {
-    title: '7. Where it is stored',
+    title: '6. Where it is stored',
     body: [
       'Our service providers\' servers may be located outside India. We choose providers that protect information to recognised security standards, and we do not transfer information to any country the Government of India has restricted. If you are in the EU or UK, we rely on the safeguards our providers offer for transfers, such as standard contractual clauses.',
     ],
   },
   {
-    title: '8. How long we keep it',
+    title: '7. How long we keep it',
     list: [
       'Account details: as long as your account is active. If you leave or ask us to delete it, we remove it within 30 days, except what we must keep by law.',
       'Visitor and gate records: as long as the society needs them for security. A society admin can ask us to delete older records at any time.',
@@ -96,7 +93,7 @@ const SECTIONS = [
     ],
   },
   {
-    title: '9. Your rights',
+    title: '8. Your rights',
     body: ['You have the right to:'],
     list: [
       'Know what information we hold about you and how it is used, and get a summary of it.',
@@ -110,38 +107,38 @@ const SECTIONS = [
     after: 'To use any of these rights, write to the Grievance Officer in section 14. We will reply within 30 days. If you are not satisfied, you may complain to the Data Protection Board of India, or if you are in the EU or UK, to your local data protection authority.',
   },
   {
-    title: '10. Children',
+    title: '9. Children',
     body: [
       'WGate is not meant for people under 18 to use on their own, and we do not track children or show them advertising. An owner or tenant may add a family member under 18 only as their parent or legal guardian, and by doing so confirms that they give consent for that child. A parent or guardian can ask us to correct or delete a child\'s information at any time.',
     ],
   },
   {
-    title: '11. Security',
+    title: '10. Security',
     body: [
       'We protect your information with HTTPS (encrypted connections), hashed passwords, role-based access so people only see what their role needs, a separate data space for each society, and limits on repeated sign-in attempts. No system is perfectly secure, so please keep your password private and sign out on shared devices.',
       'If a data breach affects you, we will tell you and the Data Protection Board of India as the law requires.',
     ],
   },
+  // {
+  //   title: '12. Information stored on your device',
+  //   body: [
+  //     'WGate keeps a sign-in token and your society selection on your device so you stay signed in and do not have to choose your society each time. We do not use advertising or analytics cookies. You can clear this by signing out or clearing the app or browser data. If you turn on notifications, we also keep a notification token for your phone (issued by Google Firebase Cloud Messaging) so we can send alerts to it; it stops being used when you sign out. If you turn on notifications, we also keep a notification token for your phone (issued by Google Firebase Cloud Messaging) so we can send alerts to it; it stops being used when you sign out.',
+  //   ],
+  // },
   {
-    title: '12. Information stored on your device',
-    body: [
-      'WGate keeps a sign-in token and your society selection on your device so you stay signed in and do not have to choose your society each time. We do not use advertising or analytics cookies. You can clear this by signing out or clearing the app or browser data. If you turn on notifications, we also keep a notification token for your phone (issued by Google Firebase Cloud Messaging) so we can send alerts to it; it stops being used when you sign out. If you turn on notifications, we also keep a notification token for your phone (issued by Google Firebase Cloud Messaging) so we can send alerts to it; it stops being used when you sign out.',
-    ],
-  },
-  {
-    title: '13. Payments',
+    title: '11. Payments',
     body: [
       'WGate does not process payments. When you pay a bill, you pay through your own UPI app (such as GPay or PhonePe) to your society\'s UPI ID. We never see your UPI PIN or bank details. We store only the transaction ID you enter to report the payment, and whether the admin confirmed it.',
     ],
   },
-  {
-    title: '14. Contact and grievance officer',
-    body: [
-      'For any question, request or complaint about your information, contact:',
-    ],
-    contact: true,
-    after: 'Changes: we may update this policy. When we make an important change, we will tell you in the app. The date at the top shows when it was last updated.',
-  },
+  // {
+  //   title: '12. Contact and grievance officer',
+  //   body: [
+  //     'For any question, request or complaint about your information, contact:',
+  //   ],
+  //   contact: true,
+  //   after: 'Changes: we may update this policy. When we make an important change, we will tell you in the app. The date at the top shows when it was last updated.',
+  // },
 ];
 
 export default function PrivacyPolicy() {

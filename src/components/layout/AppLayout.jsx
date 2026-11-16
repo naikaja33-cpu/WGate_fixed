@@ -79,17 +79,22 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">
-        <Link to="/Dashboard" className="flex items-center gap-2" aria-label="Go to home">
+      <Link to={role === 'guard' ? '/Visitors' : '/Dashboard'} className="flex items-center gap-2" aria-label="Go to home">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <Shield className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-foreground text-lg">MySociety</span>
+          <span className="font-semibold text-foreground text-lg truncate max-w-[9rem] sm:max-w-xs" title={user?.society_name || 'MySociety'}>{user?.society_name || 'MySociety'}</span>
         </Link>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full capitalize">{role}</span>
+        <div className="flex items-center gap-1">
+          <span className="mr-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full capitalize">{role}</span>
           <NotificationBell />
-          <button onClick={() => logout()} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Sign out">
-            <LogOut className="w-4 h-4" />
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:text-foreground active:bg-accent transition-colors touch-manipulation"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </header>

@@ -1,8 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { HashRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
@@ -56,8 +56,21 @@ const AboutUs = lazy(() => import('@/pages/AboutUs'));
 const ContactUs = lazy(() => import('@/pages/ContactUs'));
 const FAQ = lazy(() => import('@/pages/FAQ'));
 
+// On the home page, show wwgate.in instead of wwgate.in/#/ (the page itself works the same).
+const HideHomeHash = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (pathname === '/' && window.location.hash) {
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    }
+  }, [pathname]);
+  return null;
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated, user } = useAuth();
+  // Security guards start on the Visitors (gate) page. Everyone else starts on the Dashboard.
+  const homePath = user?.role === 'guard' ? '/Visitors' : '/Dashboard';
 
   // Show loading spinner while checking the local session
   if (isLoadingAuth) {
@@ -108,12 +121,12 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/Dashboard" replace />} />
+      <Route path="/" element={<Navigate to={homePath} replace />} />
       {/* Already logged in — bounce these public-only pages to the dashboard
           instead of 404ing if the person lands here from a bookmark/old link. */}
-      <Route path="/login" element={<Navigate to="/Dashboard" replace />} />
-            <Route path="/signup" element={<Navigate to="/Dashboard" replace />} />
-      <Route path="/s/:code" element={<Navigate to="/Dashboard" replace />} />
+      <Route path="/login" element={<Navigate to={homePath} replace />} />
+            <Route path="/signup" element={<Navigate to={homePath} replace />} />
+      <Route path="/s/:code" element={<Navigate to={homePath} replace />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/about" element={<AboutUs />} />
       <Route path="/contact" element={<ContactUs />} />
@@ -144,6 +157,7 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
+          <HideHomeHash />
           <UpdateBanner />
                    <PushSetup />
           <EmergencyButton />

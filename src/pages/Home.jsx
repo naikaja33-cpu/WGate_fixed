@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Shield,Download ,Smartphone, Apple} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SiteFooter from '@/components/SiteFooter';
+import HeroPhone from '@/components/HeroPhone';
 import WhatsAppChat from '@/components/WhatsAppChat';
 import { Input } from '@/components/ui/input';
 import {
@@ -82,10 +83,8 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="hidden md:flex items-center justify-center">
-          <div className="w-full aspect-square max-w-sm rounded-3xl bg-primary/5 flex items-center justify-center">
-            <Shield className="w-32 h-32 text-primary/30" />
-          </div>
+        <div className="hidden md:flex items-center justify-center md:order-first">
+          <HeroPhone />
         </div>
       </main>
             <section className="max-w-3xl mx-auto px-6 pb-16 text-center">

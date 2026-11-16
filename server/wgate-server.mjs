@@ -111,7 +111,110 @@ async function sendEmail({ to, subject, html, text }) {
   }
 }
 
+/* ---- Emails about new societies ----
+   1) the super admin(s) are told when a society registers,
+   2) the person who registered gets a "we received it" email with the details they entered (never the password),
+   3) the same person gets a "your society is approved" email with the sign-in link and society code.
+   These run in the background, so a slow or broken email can never block or fail the signup. */
+function buildInfoEmail({ subject, title, intro, rows = [], buttonText, buttonUrl, footer }) {
+  const text = [
+    title, '', intro, '',
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    ...(buttonUrl ? ['', `${buttonText}: ${buttonUrl}`] : []),
+    ...(footer ? ['', footer] : []),
+  ].join('\n');
+  const html = `<!doctype html>
+<html><body style="margin:0;padding:24px;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:28px;">
+    <tr><td>
+      <h2 style="margin:0 0 12px;font-size:20px;">${escapeHtml(title)}</h2>
+      <p style="margin:0 0 16px;line-height:1.5;">${escapeHtml(intro)}</p>
+      ${rows.length ? `<table role="presentation" width="100%" style="background:#f4f5f7;border-radius:8px;padding:14px;margin:0 0 20px;font-size:14px;">${rows.map(([k, v]) => `<tr><td style="color:#6b7280;padding:3px 0;">${escapeHtml(k)}</td><td style="font-weight:bold;text-align:right;">${escapeHtml(v)}</td></tr>`).join('')}</table>` : ''}
+      ${buttonUrl ? `<p style="margin:0 0 20px;"><a href="${escapeHtml(buttonUrl)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;">${escapeHtml(buttonText)}</a></p>` : ''}
+      ${footer ? `<p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">${escapeHtml(footer)}</p>` : ''}
+    </td></tr>
+  </table>
+</body></html>`;
+  return { subject, html, text };
+}
 
+// Who is told about new societies: SUPERADMIN_NOTIFY_EMAIL (comma separated) if set on the server,
+// otherwise the email of every super admin account that looks like a real address.
+async function superadminRecipients() {
+  const fromEnv = String(process.env.SUPERADMIN_NOTIFY_EMAIL || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (fromEnv.length) return fromEnv;
+  const { rows } = await pool.query('SELECT email FROM superadmins WHERE disabled IS NOT TRUE');
+  return rows.map((r) => r.email).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s.]+$/.test(e) && !e.endsWith('.local'));
+}
+
+function notifyNewSignup(society, admin) {
+  (async () => {
+    const when = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const details = [
+      ['Society', society.name],
+      ['City', society.city || '-'],
+      ['Number of flats', society.total_flats ?? '-'],
+      ['Admin name', admin.full_name || '-'],
+      ['Admin email', admin.email],
+      ['Admin phone', admin.phone || '-'],
+    ];
+    const reviewUrl = APP_URL ? `${APP_URL}/#/superadmin-login` : '';
+    for (const to of await superadminRecipients()) {
+      const r = await sendEmail({
+        to,
+        ...buildInfoEmail({
+          subject: `New society registered: ${society.name}`,
+          title: 'A new society has registered',
+          intro: 'It is waiting for your approval. The society cannot sign in until you approve it.',
+          rows: [...details, ['Registered', `${when} IST`]],
+          buttonText: 'Open super admin',
+          buttonUrl: reviewUrl,
+        }),
+      });
+      if (!r.ok) console.error(`[wgate-api] New-society email to a super admin failed: ${r.error}`);
+    }
+    const r2 = await sendEmail({
+      to: admin.email,
+      ...buildInfoEmail({
+        subject: `We received your registration: ${society.name}`,
+        title: `Thank you for registering ${society.name}`,
+        intro: 'We have received your details. Our team will review your society and approve it shortly. You will get another email as soon as it is approved, and you can sign in after that.',
+        rows: details,
+        footer: 'If any detail above is wrong, reply to this email or contact us. For your safety, we never send your password by email.',
+      }),
+    });
+    if (!r2.ok) console.error(`[wgate-api] Registration email to the society admin failed: ${r2.error}`);
+  })().catch((err) => console.error('[wgate-api] Signup emails failed:', err?.message));
+}
+
+function notifySocietyApproved(society) {
+  (async () => {
+    const schemaName = await getSocietySchemaName(society.id);
+    const users = await listEntity(schemaName, 'User');
+    const admin = users.find((u) => u.role === 'admin' && !u.disabled);
+    if (!admin?.email) return;
+    const signInUrl = APP_URL ? (society.join_code ? `${APP_URL}/#/s/${society.join_code}` : `${APP_URL}/#/login`) : '';
+    const endsOn = society.trial_ends_at ? new Date(society.trial_ends_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    const r = await sendEmail({
+      to: admin.email,
+      ...buildInfoEmail({
+        subject: `Your society is approved: ${society.name}`,
+        title: `${society.name} is approved`,
+        intro: 'Your society is now active on WGate. Sign in with the email and password you chose when you registered.',
+        rows: [
+          ['Society', society.name],
+          ...(society.join_code ? [['Society code', society.join_code]] : []),
+          ['Sign-in email', admin.email],
+          ...(endsOn ? [['Free trial ends', endsOn]] : []),
+        ],
+        buttonText: 'Sign in to WGate',
+        buttonUrl: signInUrl,
+        footer: 'Share the society code with your residents so they can find your society when they sign in.',
+      }),
+    });
+    if (!r.ok) console.error(`[wgate-api] Approval email failed: ${r.error}`);
+  })().catch((err) => console.error('[wgate-api] Approval email failed:', err?.message));
+}
 
 const ENTITIES = ['User', 'SocietySettings', 'Visitor', 'ServiceTicket', 'MaintenanceBill', 'Notice', 'AmenityBooking', 'PreApproval', 'GatePass','FlatArea','ClassifiedPost','PaymentConfig'];
 
@@ -1403,6 +1506,8 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   };
   await insertEntityRecord(schemaName, 'User', admin);
 
+  notifyNewSignup(society, admin); // emails run in the background
+
   res.status(201).json({
     message: 'Thanks for signing up. A super admin will review your society and approve it before you can sign in.',
     society: { id: society.id, name: society.name },
@@ -1890,6 +1995,7 @@ app.post('/api/superadmin/societies/:id/approve', requireAuth, requireSuperadmin
   if (!society) return res.status(404).json({ message: 'Society not found' });
   if (society.approved) return res.json(society);
   const updated = await approveSocietyRecord(req.params.id);
+  if (updated) notifySocietyApproved(updated); // email the society admin in the background
   res.json(updated);
 }));
 

@@ -120,11 +120,12 @@ async forgotPassword(email, societyId) {
   },
   logout() {
     const token = getToken();
-    setToken(null);
+    // Send the sign-out request FIRST, while the token is still set, so the server really ends this
+    // session. (The request reads the token right away; only then is it cleared on this device.)
     if (token) {
-      // Fire-and-forget; local session cleanup, no redirect.
       request('/auth/logout', { method: 'POST' }).catch(() => {});
     }
+    setToken(null);
   },
 
   redirectToLogin() {

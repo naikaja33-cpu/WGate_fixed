@@ -18,10 +18,14 @@ export default function NotificationBell() {
   return (
     <Popover open={open} onOpenChange={handleOpen}>
       <PopoverTrigger asChild>
-        <button className="relative text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:text-foreground active:bg-accent transition-colors touch-manipulation"
+        >
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
+            <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
