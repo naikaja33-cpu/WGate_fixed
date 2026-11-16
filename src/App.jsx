@@ -95,7 +95,7 @@ const AuthenticatedApp = () => {
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/faq" element={<FAQ />} />
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
-        <Route path="/signup" element={<Signup />} />
+        {!isNative && <Route path="/signup" element={<Signup />} />}
         <Route path="*" element={isNative ? <Login /> : <Navigate to="/" replace />} />
       </Routes>
     );

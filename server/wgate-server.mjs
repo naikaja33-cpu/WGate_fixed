@@ -1488,6 +1488,17 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
     return res.status(400).json({ message: 'Enter a valid phone number' });
   }
 
+  // Stop duplicates (a double tap, or someone registering a society that already exists).
+  const dup = await pool.query(
+    `SELECT 1 FROM societies WHERE lower(btrim(name)) = lower($1) AND lower(btrim(coalesce(city, ''))) = lower($2) LIMIT 1`,
+    [name, String(req.body?.city || '').trim()]
+  );
+  if (dup.rows.length) {
+    return res.status(409).json({
+      message: 'A society with this name and city is already registered. If you live there, ask your society admin for the society code. If you are the admin, please contact us.',
+    });
+  }
+
   const society = await createSocietyRecord({
     name,
     city: req.body?.city,

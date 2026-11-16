@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
+import { Capacitor } from '@capacitor/core';
 
 // The society this phone or browser signed in to last time, so the member does not have to enter the code again.
 const SAVED_KEY = 'wgate_society';
@@ -167,17 +168,27 @@ export default function Login() {
             {codeLoading ? 'Checking...' : 'Continue'}
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground pt-2">
-            New society?{' '}
-            <Link to="/signup" className="text-primary font-medium hover:underline">
-              Sign up
-            </Link>
-          </p>
-          <p className="text-center text-sm text-muted-foreground">
-            <Link to="/home" className="text-primary font-medium hover:underline">
-              Back to Home
-            </Link>
-          </p>
+          {Capacitor.isNativePlatform() && (
+            <p className="text-center text-sm text-muted-foreground pt-2">
+              Registering a society? Visit <span className="font-medium text-foreground">wwgate.in</span> in your phone's browser.
+            </p>
+          )}
+          {/* The Android app is for members only: no "Sign up" and no "Back to Home" there. */}
+          {!Capacitor.isNativePlatform() && (
+            <>
+              <p className="text-center text-sm text-muted-foreground pt-2">
+                New society?{' '}
+                <Link to="/signup" className="text-primary font-medium hover:underline">
+                  Sign up
+                </Link>
+              </p>
+              <p className="text-center text-sm text-muted-foreground">
+                <Link to="/home" className="text-primary font-medium hover:underline">
+                  Back to Home
+                </Link>
+              </p>
+            </>
+          )}
         </form>
       </AuthLayout>
     );
