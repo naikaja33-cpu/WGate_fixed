@@ -69,14 +69,15 @@ export default function Login() {
   const handleCodeSubmit = async (e) => {
     e.preventDefault();
     setCodeError('');
-    const clean = code.replace(/[^a-zA-Z0-9]/g, '');
-    if (clean.length < 6) {
-      setCodeError('Enter the society code your admin gave you.');
+    // Strict: the code is sent exactly as typed. It must look like X75Z-3FE2 (with the dash).
+    const typed = code.trim();
+    if (!/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(typed)) {
+      setCodeError('Enter the society code exactly as your admin gave it, with the dash (for example X75Z-3FE2).');
       return;
     }
     setCodeLoading(true);
     try {
-      chooseSociety(await wgate.publicApi.societies.byCode(clean));
+      chooseSociety(await wgate.publicApi.societies.byCode(typed));
     } catch (err) {
       setCodeError(err?.message || 'Could not check the code. Please try again.');
     } finally {
@@ -151,12 +152,12 @@ export default function Login() {
               autoCapitalize="characters"
               autoCorrect="off"
               autoComplete="off"
-              maxLength={14}
+              maxLength={9}
               className="font-mono tracking-wider"
               autoFocus={!codeFromLink}
             />
             <p className="text-xs text-muted-foreground">
-              Ask your society admin for the code, or open the sign-in link they shared.
+              Type the code exactly as your admin gave it. Or open the sign-in link they shared.
             </p>
           </div>
 

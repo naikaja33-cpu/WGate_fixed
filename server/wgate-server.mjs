@@ -193,7 +193,8 @@ function notifySocietyApproved(society) {
     const users = await listEntity(schemaName, 'User');
     const admin = users.find((u) => u.role === 'admin' && !u.disabled);
     if (!admin?.email) return;
-    const signInUrl = APP_URL ? (society.join_code ? `${APP_URL}/#/s/${society.join_code}` : `${APP_URL}/#/login`) : '';
+    const dashedCode = society.join_code ? `${society.join_code.slice(0, 4)}-${society.join_code.slice(4)}` : '';
+    const signInUrl = APP_URL ? (dashedCode ? `${APP_URL}/#/s/${dashedCode}` : `${APP_URL}/#/login`) : '';
     const endsOn = society.trial_ends_at ? new Date(society.trial_ends_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' }) : '';
     const r = await sendEmail({
       to: admin.email,
@@ -203,7 +204,7 @@ function notifySocietyApproved(society) {
         intro: 'Your society is now active on WGate. Sign in with the email and password you chose when you registered.',
         rows: [
           ['Society', society.name],
-          ...(society.join_code ? [['Society code', society.join_code]] : []),
+          ...(dashedCode ? [['Society code', dashedCode]] : []),
           ['Sign-in email', admin.email],
           ...(endsOn ? [['Free trial ends', endsOn]] : []),
         ],
@@ -1383,10 +1384,17 @@ app.get('/api/public/society-by-code', codeLookupLimit, wrap(async (req, res) =>
   const failKey = `code|${clientIp(req)}`;
   const lockedFor = codeFailures.blockedFor(failKey);
   if (lockedFor) return sendTooMany(res, lockedFor, 'Too many wrong codes. Please wait a few minutes and try again.');
-  const code = String(req.query.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const { rows } = code.length >= 6 && code.length <= 12
-    ? await pool.query('SELECT id, name, city FROM societies WHERE join_code = $1 AND approved = true', [code])
-    : { rows: [] };
+  // Strict: the code must be typed exactly as it was generated and shown: 4 capital letters or numbers,
+  // a dash, then 4 more (for example X75Z-3FE2). No code without the dash, no lowercase, no extra spaces.
+  const entered = String(req.query.code || '');
+  if (!/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(entered)) {
+    codeFailures.hit(failKey);
+    return res.status(400).json({ message: 'Enter the society code exactly as it was given to you, with the dash (for example X75Z-3FE2).' });
+  }
+  const { rows } = await pool.query(
+    'SELECT id, name, city FROM societies WHERE join_code = $1 AND approved = true',
+    [entered.replace('-', '')]
+  );
   if (!rows[0]) {
     codeFailures.hit(failKey);
     return res.status(404).json({ message: 'That society code was not found. Please check it with your society admin.' });

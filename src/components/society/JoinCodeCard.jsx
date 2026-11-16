@@ -17,7 +17,7 @@ export default function JoinCodeCard() {
   const code = data?.join_code || '';
   if (!code) return null;
 
-  const link = `${SITE}/#/s/${code}`;
+  const link = `${SITE}/#/s/${formatCode(code)}`;
   const message = `Sign in to ${data?.name || 'our society'} on WGate.\nOpen this link: ${link}\nSociety code: ${formatCode(code)}`;
 
   const copyLink = async () => {

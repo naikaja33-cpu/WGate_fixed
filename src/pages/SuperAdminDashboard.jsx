@@ -96,7 +96,7 @@ export default function SuperAdminDashboard() {
 
   const handleCopyLink = async (society) => {
     try {
-      await navigator.clipboard.writeText(`https://wwgate.in/#/s/${society.join_code}`);
+     await navigator.clipboard.writeText(`https://wwgate.in/#/s/${formatJoinCode(society.join_code)}`);
       toast.success('Sign-in link copied');
     } catch {
       toast.error('Could not copy the link');
