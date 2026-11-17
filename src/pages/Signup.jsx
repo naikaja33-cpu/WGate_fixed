@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { wgate } from '@/api/wgateClient';
+import CityPicker from '@/components/CityPicker';
 
 const initialForm = {
   society_name: '',
@@ -38,6 +39,7 @@ const [agreed, setAgreed] = useState(false);
     e.preventDefault();
     setError('');
     if (!form.society_name.trim()) return setError('Society name is required');
+    if (!form.city) return setError('Please select your state');
     //if (!agreed) return setError('Please accept the Privacy Policy to continue');
     if (!form.email.trim()) return setError('Email is required');
   if (!form.password || form.password.length < 8) return setError('Password must be at least 8 characters');
@@ -101,8 +103,9 @@ const [agreed, setAgreed] = useState(false);
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="signup-city">City</Label>
-              <Input id="signup-city" value={form.city} onChange={setField('city')} />
+              <Label htmlFor="signup-city">State</Label>
+              {/* <Input id="signup-city" value={form.city} onChange={setField('city')} /> */}
+                            <CityPicker id="signup-city" value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="signup-flats">Total Flats</Label>

@@ -21,6 +21,7 @@
  * Start it with `npm run dev` (starts this + Vite together) or `npm run dev:api`.
  */
 import { config as loadEnv } from 'dotenv';
+import { INDIA_CITIES } from '../src/lib/indiaCities.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -152,7 +153,7 @@ function notifyNewSignup(society, admin) {
     const when = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
     const details = [
       ['Society', society.name],
-      ['City', society.city || '-'],
+      ['State', society.city || '-'],
       ['Number of flats', society.total_flats ?? '-'],
       ['Admin name', admin.full_name || '-'],
       ['Admin email', admin.email],
@@ -1495,6 +1496,10 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   const name = String(req.body?.society_name || '').trim();
   if (!name) return res.status(400).json({ message: 'Society name is required' });
 
+  // The city must be one from the list (so nobody can send anything else, even without the app).
+  const city = INDIA_CITIES.find((c) => c.toLowerCase() === String(req.body?.city || '').trim().toLowerCase());
+  if (!city) return res.status(400).json({ message: 'Please select your state from the list' });
+
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });
   const password = req.body?.password;
@@ -1522,7 +1527,7 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
 
   const society = await createSocietyRecord({
     name,
-    city: req.body?.city,
+    city,
     address: req.body?.address,
     total_flats: req.body?.total_flats ?? null,
     approved: false,
