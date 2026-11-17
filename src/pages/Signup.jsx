@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Shield, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import { Input } from '@/components/ui/input';
@@ -7,10 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { wgate } from '@/api/wgateClient';
 import CityPicker from '@/components/CityPicker';
+import { SIGNUP_REASONS } from '@/lib/signupReasons';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const initialForm = {
   society_name: '',
   city: '',
+  reason: '',
   address: '',
   total_flats: '',
   full_name: '',
@@ -20,7 +23,14 @@ const initialForm = {
 };
 
 export default function Signup() {
-  const [form, setForm] = useState(initialForm);
+  // The home page hands over the name, phone and reason the person already typed there.
+  const fromHome = useLocation().state || {};
+  const [form, setForm] = useState({
+    ...initialForm,
+    full_name: String(fromHome.full_name || ''),
+    phone: String(fromHome.phone || '').replace(/\D/g, '').slice(0, 10),
+    reason: SIGNUP_REASONS.includes(fromHome.reason) ? fromHome.reason : '',
+  });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null); // { society } once signed up
@@ -40,6 +50,7 @@ const [agreed, setAgreed] = useState(false);
     setError('');
     if (!form.society_name.trim()) return setError('Society name is required');
     if (!form.city) return setError('Please select your state');
+    if (!form.reason) return setError('Please tell us why you are signing up');
     //if (!agreed) return setError('Please accept the Privacy Policy to continue');
     if (!form.email.trim()) return setError('Email is required');
   if (!form.password || form.password.length < 8) return setError('Password must be at least 8 characters');
@@ -56,6 +67,7 @@ const [agreed, setAgreed] = useState(false);
         email: form.email.trim(),
         phone: form.phone.trim(),
         password: form.password,
+        reason: form.reason,
       });
       setSubmitted(result);
     } catch (err) {
@@ -115,6 +127,19 @@ const [agreed, setAgreed] = useState(false);
           <div className="space-y-1.5">
             <Label htmlFor="signup-address">Address</Label>
             <Input id="signup-address" value={form.address} onChange={setField('address')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-reason">Reason for signing up *</Label>
+            <Select value={form.reason} onValueChange={(reason) => setForm((f) => ({ ...f, reason }))}>
+              <SelectTrigger id="signup-reason">
+                <SelectValue placeholder="Select reason" />
+              </SelectTrigger>
+              <SelectContent>
+                {SIGNUP_REASONS.map((r) => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

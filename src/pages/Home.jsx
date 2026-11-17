@@ -13,9 +13,10 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
+import { SIGNUP_REASONS } from '@/lib/signupReasons';
 
 
-const REASONS = ['New Society', 'Switching from another provider', 'Just exploring'];
+const REASONS = SIGNUP_REASONS;
 
 export default function Home() {
   const navigate = useNavigate();

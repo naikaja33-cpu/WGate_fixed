@@ -22,6 +22,7 @@
  */
 import { config as loadEnv } from 'dotenv';
 import { INDIA_CITIES } from '../src/lib/indiaCities.js';
+import { SIGNUP_REASONS } from '../src/lib/signupReasons.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -148,7 +149,7 @@ async function superadminRecipients() {
   return rows.map((r) => r.email).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s.]+$/.test(e) && !e.endsWith('.local'));
 }
 
-function notifyNewSignup(society, admin) {
+function notifyNewSignup(society, admin, reason) {
   (async () => {
     const when = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
     const details = [
@@ -158,6 +159,7 @@ function notifyNewSignup(society, admin) {
       ['Admin name', admin.full_name || '-'],
       ['Admin email', admin.email],
       ['Admin phone', admin.phone || '-'],
+      ['Reason for signing up', reason || '-'],
     ];
     const reviewUrl = APP_URL ? `${APP_URL}/#/superadmin-login` : '';
     for (const to of await superadminRecipients()) {
@@ -188,6 +190,43 @@ function notifyNewSignup(society, admin) {
   })().catch((err) => console.error('[wgate-api] Signup emails failed:', err?.message));
 }
 
+// The people to tell when a society is removed. This must be read BEFORE the society is deleted,
+// because its member list is deleted with it.
+async function collectSocietyAdminContacts(society) {
+  try {
+    const schemaName = await getSocietySchemaName(society.id);
+    const users = await listEntity(schemaName, 'User');
+    return users.filter((u) => u.role === 'admin' && u.email).map((u) => u.email);
+  } catch (err) {
+    console.error('[wgate-api] Could not read society admins before delete:', err?.message);
+    return [];
+  }
+}
+
+// Tells the society admin(s) that the society was removed. Runs in the background after the delete.
+function notifySocietyDeleted(society, adminEmails) {
+  (async () => {
+    const when = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const wasActive = !!society.approved;
+    for (const to of [...new Set(adminEmails)]) {
+      const r = await sendEmail({
+        to,
+        ...buildInfoEmail({
+          subject: wasActive ? `Your society was removed from WGate: ${society.name}` : `Your registration was removed: ${society.name}`,
+          title: wasActive ? `${society.name} was removed from WGate` : `Your registration for ${society.name} was removed`,
+          intro: wasActive
+            ? 'Your society and all its data (members, visitors, bills and notices) have been permanently deleted, and nobody can sign in to it any more. If you think this is a mistake, or you would like to register again, please contact us.'
+            : 'Your registration has been removed, so the society will not be set up. You are welcome to register again, or contact us if you have a question.',
+          rows: [['Society', society.name], ['Removed on', `${when} IST`]],
+          buttonText: APP_URL ? 'Contact us' : undefined,
+          buttonUrl: APP_URL ? `${APP_URL}/#/contact` : undefined,
+        }),
+      });
+      if (!r.ok) console.error(`[wgate-api] Society-removed email failed: ${r.error}`);
+    }
+  })().catch((err) => console.error('[wgate-api] Society-removed email failed:', err?.message));
+}
+
 function notifySocietyApproved(society) {
   (async () => {
     const schemaName = await getSocietySchemaName(society.id);
@@ -195,7 +234,8 @@ function notifySocietyApproved(society) {
     const admin = users.find((u) => u.role === 'admin' && !u.disabled);
     if (!admin?.email) return;
     const dashedCode = society.join_code ? `${society.join_code.slice(0, 4)}-${society.join_code.slice(4)}` : '';
-    const signInUrl = APP_URL ? (dashedCode ? `${APP_URL}/#/s/${dashedCode}` : `${APP_URL}/#/login`) : '';
+    // const signInUrl = APP_URL ? (dashedCode ? `${APP_URL}/#/s/${dashedCode}` : `${APP_URL}/#/login`) : '';
+    const signInUrl = APP_URL ? `${APP_URL}/#/login` : '';
     const endsOn = society.trial_ends_at ? new Date(society.trial_ends_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' }) : '';
     const r = await sendEmail({
       to: admin.email,
@@ -1499,6 +1539,7 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   // The city must be one from the list (so nobody can send anything else, even without the app).
   const city = INDIA_CITIES.find((c) => c.toLowerCase() === String(req.body?.city || '').trim().toLowerCase());
   if (!city) return res.status(400).json({ message: 'Please select your state from the list' });
+  const reason = SIGNUP_REASONS.find((r) => r === String(req.body?.reason || '').trim()) || '';
 
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -1551,7 +1592,7 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   };
   await insertEntityRecord(schemaName, 'User', admin);
 
-  notifyNewSignup(society, admin); // emails run in the background
+  notifyNewSignup(society, admin, reason); // emails run in the background
 
   res.status(201).json({
     message: 'Thanks for signing up. A super admin will review your society and approve it before you can sign in.',
@@ -2177,7 +2218,10 @@ app.delete('/api/superadmin/societies/:id', requireAuth, requireSuperadmin, wrap
       member_count: userCount,
     });
   }
+  // Note who to tell first, because the member list is deleted with the society.
+  const adminEmails = await collectSocietyAdminContacts(society);
   await deleteSocietyRecord(society.id);
+  notifySocietyDeleted(society, adminEmails); // email goes out in the background
   res.json({ success: true });
 }));
 /* Super admin chooses which menu sections a society can use. Stored in that

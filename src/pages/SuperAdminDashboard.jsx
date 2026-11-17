@@ -9,6 +9,7 @@ import { wgate } from '@/api/wgateClient';
 import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import AnnouncementCard from '@/components/announcement/AnnouncementCard';
+import CityPicker from '@/components/CityPicker';
 
 // Mirrors the backend's GRACE_DAYS (server/wgate-server.mjs) — how many
 // extra days a society keeps working after its trial date passes before
@@ -474,8 +475,8 @@ function SocietyFormModal({ society, onClose, onSaved }) {
             <Input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </div>
           <div className="space-y-1.5">
-            <Label>City</Label>
-            <Input value={city} onChange={(e) => setCity(e.target.value)} />
+            <Label>State</Label>
+            <CityPicker value={city} onChange={setCity} />
           </div>
           <div className="space-y-1.5">
             <Label>Address</Label>
