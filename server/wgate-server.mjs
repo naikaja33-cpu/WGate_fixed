@@ -896,12 +896,26 @@ function superadminRowToUser(row) {
   };
 }
 
+// How many phones or browsers one account can be signed in on at the same time.
+// When one more signs in, the one that was signed in the longest ago is signed out.
+// Change it on Render with MAX_DEVICES_PER_USER (default 3).
+const MAX_DEVICES_PER_USER = Math.max(1, Number(process.env.MAX_DEVICES_PER_USER) || 3);
+
 async function createSession(userId, societyId) {
   const token = crypto.randomBytes(32).toString('hex');
   await pool.query(
     `INSERT INTO sessions (id, user_id, society_id, token_hash, expires_at) VALUES ($1,$2,$3,$4,$5)`,
     [newId(), userId, societyId || null, sha256(token), new Date(Date.now() + SESSION_TTL_MS)]
   );
+  // Keep only the newest few sessions for this account; older ones are signed out.
+  // (Their push-notification tokens are tied to the session, so they stop getting alerts too.)
+  const { rowCount } = await pool.query(
+    `DELETE FROM sessions
+      WHERE user_id = $1
+        AND id NOT IN (SELECT id FROM sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2)`,
+    [userId, MAX_DEVICES_PER_USER]
+  );
+  if (rowCount) clearAuthCache();
   return token;
 }
 // Retention windows (days) — how long to keep a record after it's no
@@ -1474,6 +1488,9 @@ app.put('/api/superadmin/announcement', requireAuth, requireSuperadmin, wrap(asy
    society starts unapproved: nobody in it can log in until a super admin
    approves it (see POST /api/superadmin/societies/:id/approve), at which
    point its trial period starts. */
+// Society names that were submitted in the last 2 minutes (stops a double tap creating two societies).
+const recentSignupNames = new Map();
+
 app.post('/api/signup', signupLimit, wrap(async (req, res) => {
   const name = String(req.body?.society_name || '').trim();
   if (!name) return res.status(400).json({ message: 'Society name is required' });
@@ -1488,16 +1505,20 @@ app.post('/api/signup', signupLimit, wrap(async (req, res) => {
     return res.status(400).json({ message: 'Enter a valid phone number' });
   }
 
-  // Stop duplicates (a double tap, or someone registering a society that already exists).
+  // Stop duplicates. Names are compared ignoring capitals, spaces and punctuation, in any city, so
+  // "Green Valley", "green  valley" and "Green-Valley" all count as the same society.
+  const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!nameKey) return res.status(400).json({ message: 'Enter a valid society name' });
+  const nowMs = Date.now();
+  for (const [k, t] of recentSignupNames) if (nowMs - t > 2 * 60 * 1000) recentSignupNames.delete(k);
+  const alreadyRegisteredMessage = 'A society with this name is already registered. If you live there, ask your society admin for the society code. If you are the admin, please contact us.';
+  if (recentSignupNames.has(nameKey)) return res.status(409).json({ message: alreadyRegisteredMessage });
   const dup = await pool.query(
-    `SELECT 1 FROM societies WHERE lower(btrim(name)) = lower($1) AND lower(btrim(coalesce(city, ''))) = lower($2) LIMIT 1`,
-    [name, String(req.body?.city || '').trim()]
+    `SELECT 1 FROM societies WHERE regexp_replace(lower(name), '[^a-z0-9]', '', 'g') = $1 LIMIT 1`,
+    [nameKey]
   );
-  if (dup.rows.length) {
-    return res.status(409).json({
-      message: 'A society with this name and city is already registered. If you live there, ask your society admin for the society code. If you are the admin, please contact us.',
-    });
-  }
+  if (dup.rows.length) return res.status(409).json({ message: alreadyRegisteredMessage });
+  recentSignupNames.set(nameKey, nowMs);
 
   const society = await createSocietyRecord({
     name,
