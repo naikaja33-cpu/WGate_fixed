@@ -5,7 +5,7 @@ android {
     namespace = "com.wgate.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.wgate.app"
+        applicationId "in.wwgate.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode versionFile.versionCode as int

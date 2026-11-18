@@ -16,6 +16,31 @@
       "api_key": [
         {
           "current_key": "AIzaSyCgZrq6wpONGVl3NVlsK5ytV9bjA53Q5lc"
+        },
+        {
+          "current_key": "AIzaSyB7jzwB6gDFhP-sKLtCD4MMoxZEB7KzfYo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:215287549937:android:d568f950042c55521efe50",
+        "android_client_info": {
+          "package_name": "in.wwgate.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgZrq6wpONGVl3NVlsK5ytV9bjA53Q5lc"
+        },
+        {
+          "current_key": "AIzaSyB7jzwB6gDFhP-sKLtCD4MMoxZEB7KzfYo"
         }
       ],
       "services": {

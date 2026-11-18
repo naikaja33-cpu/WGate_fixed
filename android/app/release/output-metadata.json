@@ -4,15 +4,15 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.wgate.app",
+  "applicationId": "in.wwgate.app",
   "variantName": "release",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 18,
-      "versionName": "1.18",
+      "versionCode": 19,
+      "versionName": "1.19",
       "outputFile": "app-release.apk"
     }
   ],
