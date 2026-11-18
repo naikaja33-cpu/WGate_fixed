@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
-  "versionName": "1.19",
-  "minVersionCode": 16,
+  "versionCode": 20,
+  "versionName": "1.20",
+  "minVersionCode": 20,
   "notes": "Bug fix"
 }

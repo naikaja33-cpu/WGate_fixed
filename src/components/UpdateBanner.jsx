@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Browser } from '@capacitor/browser';
 
 const SITE = 'https://wwgate.in';
 
@@ -38,6 +39,15 @@ export default function UpdateBanner() {
 
   const apkUrl = `${SITE}/wgate.apk`;
 
+  // One tap: open the APK link in the phone's browser so the download starts.
+  const openUpdate = async () => {
+    try {
+      await Browser.open({ url: apkUrl });
+    } catch {
+      window.location.href = apkUrl;
+    }
+  };
+
   if (forced) {
     return (
       <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center p-6">
@@ -49,9 +59,10 @@ export default function UpdateBanner() {
             {update.versionName ? ` (v${update.versionName})` : ''}
           </p>
           {update.notes && <p className="text-xs text-muted-foreground">{update.notes}</p>}
-          <a href={apkUrl} target="_blank" rel="noopener noreferrer" className="block">
-            <Button className="w-full">Download update</Button>
-          </a>
+          <Button className="w-full" onClick={openUpdate}>Download update</Button>
+          <p className="text-xs text-muted-foreground">
+            After the download finishes, open the file and press Install.
+          </p>
         </div>
       </div>
     );
@@ -69,15 +80,15 @@ export default function UpdateBanner() {
         <div className="flex-1 min-w-0 text-sm">
           <p className="font-medium">Update available{update.versionName ? ` (v${update.versionName})` : ''}</p>
           {update.notes && <p className="text-xs opacity-90 truncate">{update.notes}</p>}
+          <p className="text-xs opacity-90">After download, open the file and press Install.</p>
         </div>
-        <a
-          href={apkUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 rounded-full px-3 py-1.5"
+        <button
+          type="button"
+          onClick={openUpdate}
+          className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 active:bg-white/40 rounded-full px-4 py-2.5 min-h-[40px] touch-manipulation"
         >
           Update
-        </a>
+        </button>
         <button
           type="button"
           onClick={() => setDismissed(true)}
