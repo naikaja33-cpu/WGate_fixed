@@ -406,11 +406,42 @@ const isLocalDb = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL);
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isLocalDb ? false : { rejectUnauthorized: false },
+  // At most this many connections open at once (Neon's pooled address handles many more).
+  max: Math.max(2, Number(process.env.DB_POOL_MAX) || 10),
+  // Close a connection that sat unused for 30 seconds, so the pool never reuses one that Neon already dropped.
+  idleTimeoutMillis: 30000,
+  // Stop waiting for a connection after 15 seconds (a sleeping Neon database can take a few seconds to wake up).
+  connectionTimeoutMillis: 15000,
+  // Keep the connection alive so routers in between do not silently drop it.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 pool.on('error', (err) => {
   console.error('[wgate-api] Unexpected Postgres error on idle client:', err.message);
 });
+
+// A sleeping or restarted database can drop the first connection. Read queries (SELECT) are tried once more;
+// writes are never repeated, so nothing can be saved twice.
+const rawPoolQuery = pool.query.bind(pool);
+const isDbHiccup = (e) =>
+  /terminated|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EPIPE|timeout exceeded when trying to connect/i.test(`${e?.code || ''} ${e?.message || ''}`);
+pool.query = async (...args) => {
+  try {
+    return await rawPoolQuery(...args);
+  } catch (err) {
+    const text = typeof args[0] === 'string' ? args[0] : '';
+    if (!/^\s*select\b/i.test(text) || !isDbHiccup(err)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return rawPoolQuery(...args);
+  }
+};
+
+// Optional: set DB_KEEPALIVE_MINUTES (for example 4) on Render to keep the database awake. Off by default.
+const dbKeepAliveMinutes = Number(process.env.DB_KEEPALIVE_MINUTES) || 0;
+if (dbKeepAliveMinutes > 0) {
+  setInterval(() => { pool.query('SELECT 1').catch(() => {}); }, dbKeepAliveMinutes * 60000).unref();
+}
 
 /* ------------------------------------------------------------------ */
 /* Schema-per-society helpers                                         */
