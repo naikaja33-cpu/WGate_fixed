@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "1.20",
+  "versionCode": 21,
+  "versionName": "1.21",
   "minVersionCode": 20,
-  "notes": "Bug fix"
+  "notes": "IST,QR,QR Code,Visitor,Ticket,Export CSV"
 }
