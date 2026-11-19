@@ -2,13 +2,16 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { formatIST, formatDay } from '@/lib/ist';
 import { KeyRound, X, Copy, Check, ShieldCheck, ScanLine } from 'lucide-react';
+import PassQR from '@/components/gatepass/PassQR';
+import QRScanner from '@/components/gatepass/QRScanner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Today's date in India (YYYY-MM-DD), whatever the phone's own time zone is. Matches the server.
+const todayStr = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
 
 function StatusBadge({ status }) {
   const styles = {
@@ -66,6 +69,7 @@ export default function GatePasses() {
 
   const [verifyCode, setVerifyCode] = useState('');
   const [verifyResult, setVerifyResult] = useState(null); // { ok, message, visitor_name }
+  const [scanning, setScanning] = useState(false);
 
   const { data: records = [], isLoading } = useQuery({
     queryKey: ['gate-passes'],
@@ -114,6 +118,18 @@ export default function GatePasses() {
     createMutation.mutate(form);
   };
 
+  // The QR holds "WGATE:ABC123". Read the code from it and check it like a typed code.
+  const handleScanned = (text) => {
+    setScanning(false);
+    setVerifyResult(null);
+    const m = String(text || '').trim().toUpperCase().match(/^(?:WGATE:)?([A-Z0-9]{6})$/);
+    if (!m) {
+      setVerifyResult({ ok: false, message: 'This QR is not a WGate gate pass' });
+      return;
+    }
+    verifyMutation.mutate(m[1]);
+  };
+
   const handleVerify = (e) => {
     e.preventDefault();
     setVerifyResult(null);
@@ -156,6 +172,18 @@ export default function GatePasses() {
           <Label className="flex items-center gap-2">
             <ScanLine className="w-4 h-4 text-primary" /> Verify a code
           </Label>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => {
+              setVerifyResult(null);
+              setScanning(true);
+            }}
+          >
+            <ScanLine className="w-4 h-4 mr-2" /> Scan QR code
+          </Button>
+          {scanning && <QRScanner onScan={handleScanned} onClose={() => setScanning(false)} />}
+          <p className="text-xs text-muted-foreground">Or type the 6-character code:</p>
           <div className="flex gap-2">
             <Input
               value={verifyCode}
@@ -183,7 +211,8 @@ export default function GatePasses() {
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
               <p className="text-xs font-medium text-emerald-800">Pass created — share this code:</p>
               <CodeDisplay code={lastCreated.code} />
-              <p className="text-xs text-emerald-700">Valid on {format(new Date(lastCreated.valid_date), 'd MMM yyyy')} only.</p>
+              <PassQR pass={lastCreated} />
+              <p className="text-xs text-emerald-700">Valid on {formatDay(lastCreated.valid_date, 'd MMM yyyy')} only.</p>
             </div>
           )}
 
@@ -260,11 +289,12 @@ export default function GatePasses() {
                   </div>
                   <p className="text-sm text-muted-foreground">{r.visitor_name}{r.visitor_phone ? ` · ${r.visitor_phone}` : ''}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Valid {format(new Date(r.valid_date), 'd MMM yyyy')}
-                    {r.status === 'used' && r.used_at ? ` · used ${format(new Date(r.used_at), 'd MMM, h:mm a')}` : ''}
+                    Valid {formatDay(r.valid_date, 'd MMM yyyy')}
+                    {r.status === 'used' && r.used_at ? ` · used ${formatIST(r.used_at, 'd MMM, h:mm a')}` : ''}
                   </p>
                   {isAdmin && <p className="text-xs text-muted-foreground mt-1">Flat {r.flat_number || '—'} · {r.resident_email}</p>}
                   {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
+                  {r.status === 'active' && <PassQR pass={r} collapsible />}
                 </div>
                 {r.status === 'active' && (
                   <Button

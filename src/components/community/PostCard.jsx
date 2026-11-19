@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Phone, MessageCircle, Pencil, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
 import PhotoViewer from '@/components/community/PhotoViewer';
-import { format } from 'date-fns';
+import { formatIST } from '@/lib/ist';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { categoryOf } from '@/components/community/categories';
@@ -52,7 +52,7 @@ export default function PostCard({ post, isMine, isAdmin, onEdit, onToggleStatus
 
       <p className="text-xs text-muted-foreground">
         {post.resident_name || 'Resident'}{post.flat_number ? ` · Flat ${post.flat_number}` : ''}
-        {post.created_date ? ` · ${format(new Date(post.created_date), 'MMM d')}` : ''}
+        {post.created_date ? ` · ${formatIST(post.created_date, 'MMM d')}` : ''}
       </p>
 
       {!isMine && !closed && (

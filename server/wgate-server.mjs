@@ -381,7 +381,8 @@ function generateTempPassword() {
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const newId = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Today's date in India (YYYY-MM-DD). The server runs on UTC, so without this "today" is still yesterday until 5:30 AM IST.
+const todayStr = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
 const normEmail = (email) => String(email || '').trim().toLowerCase();
 // A phone number is optional here, but when given it must be exactly 10 digits (numbers only).
 const isValidPhone = (phone) => {
@@ -2656,6 +2657,37 @@ app.get('/api/export/visitors', requireAuth, requireAdmin, requireSocietySchema,
   sendCsv(res, `Visitors-${from}-to-${to}.csv`, header, rows);
 }));
 
+// Admin: service tickets, filtered by status and by the day they were raised (default: the last 12 months).
+const TICKET_STATUS_LABELS = { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' };
+app.get('/api/export/tickets', requireAuth, requireAdmin, requireSocietySchema, exportLimit, wrap(async (req, res) => {
+  const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+  const to = isDay(req.query.to) ? String(req.query.to) : istToday();
+  const from = isDay(req.query.from)
+    ? String(req.query.from)
+    : new Date(Date.parse(`${to}T00:00:00Z`) - 364 * 86400000).toISOString().slice(0, 10);
+  if (from > to) return res.status(400).json({ message: 'The From date must be on or before the To date' });
+  const wanted = String(req.query.status || '').split(',').map((s) => s.trim()).filter((s) => TICKET_STATUS_LABELS[s]);
+  const statuses = wanted.length ? wanted : Object.keys(TICKET_STATUS_LABELS);
+  const { rows: found } = await pool.query(
+    `SELECT data FROM "${req.schemaName}".entity_records
+      WHERE entity = 'ServiceTicket' AND created_date >= $1::timestamptz AND created_date < $2::timestamptz
+        AND data->>'status' = ANY($3::text[])
+      ORDER BY created_date DESC LIMIT 20000`,
+    [`${from}T00:00:00+05:30`, new Date(Date.parse(`${to}T00:00:00+05:30`) + 86400000).toISOString(), statuses]
+  );
+  const users = await listEntity(req.schemaName, 'User');
+  const nameOf = new Map(users.map((u) => [String(u.email || '').toLowerCase(), u.full_name || '']));
+  const header = ['Ticket no', 'Raised date', 'Raised time', 'Flat', 'Resident', 'Email', 'Category', 'Title', 'Description', 'Priority', 'Status', 'Assigned to', 'Last updated date', 'Last updated time'];
+  const rows = found.map(({ data: t }) => [
+    t.ticket_number, istDay(t.created_date), istTime(t.created_date), t.flat_number,
+    nameOf.get(String(t.resident_email || '').toLowerCase()) || '', t.resident_email,
+    String(t.category || '').replace(/_/g, ' '), t.title, t.description, t.priority,
+    TICKET_STATUS_LABELS[t.status] || t.status, t.assigned_to,
+    istDay(t.updated_date), istTime(t.updated_date),
+  ]);
+  sendCsv(res, `Tickets-${from}-to-${to}.csv`, header, rows);
+}));
+
 /* ------------------------- payment reminders ------------------------- */
 
 const remindLimit = rateLimit({
@@ -3660,7 +3692,7 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
   if (pass.status === 'cancelled') return res.status(409).json({ message: 'This gate pass was cancelled' });
   if (pass.status === 'used') {
     return res.status(409).json({
-      message: `Already used${pass.used_at ? ' at ' + new Date(pass.used_at).toLocaleString() : ''}`,
+      message: `Already used${pass.used_at ? ' at ' + new Date(pass.used_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''}`,
     });
   }
   if (pass.valid_date !== todayStr()) {

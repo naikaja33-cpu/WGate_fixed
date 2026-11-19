@@ -20,9 +20,9 @@ export function buildUpiLink({ upiId, payeeName, amount, note }) {
 
 // ---- Late fine: a flat fee added once when a bill is paid after its due date (no grace days) ----
 
-// Today as 'yyyy-MM-dd' in the viewer's own time zone.
+// Today as 'yyyy-MM-dd' in India time (or the India date of the moment given).
 export const todayString = (d = new Date()) =>
-  new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10);
 
 const dueDay = (bill) => (bill?.due_date ? String(bill.due_date).slice(0, 10) : '');
 const fineOf = (bill) => Math.max(0, Math.round(Number(bill?.late_fine) || 0));
@@ -70,9 +70,9 @@ export function daysOverdue(bill, today = todayString()) {
 export function lockDateFor(bill, days) {
   const due = dueDay(bill);
   if (!due || !(days > 0)) return '';
-  const d = new Date(`${due}T00:00:00`);
-  d.setDate(d.getDate() + days + 1); // locked once MORE than `days` days late
-  return todayString(d);
+  const [y, m, day] = due.split('-').map(Number);
+  // locked once MORE than `days` days late
+  return new Date(Date.UTC(y, m - 1, day + days + 1)).toISOString().slice(0, 10);
 }
 
 // True when this bill is what locks the flat out right now. The server makes the real decision;

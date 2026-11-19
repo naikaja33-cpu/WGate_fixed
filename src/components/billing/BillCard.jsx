@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, CheckCircle2, Clock, IndianRupee, Smartphone, MessageCircle, Lock,Download } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatIST, formatDay } from '@/lib/ist';
 import { effectiveStatus, lateFineFor, isLocked, lockDateFor, reminderMessage, whatsappReminderLink } from '@/lib/billing';
 
 const statusStyles = {
@@ -82,12 +82,12 @@ export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay,
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         {bill.due_date && (
           <span className="flex items-center gap-1">
-            <Calendar className="w-3 h-3" /> Due {format(new Date(bill.due_date), 'MMM d')}
+            <Calendar className="w-3 h-3" /> Due {formatDay(bill.due_date, 'MMM d')}
           </span>
         )}
         {bill.paid_date && (
           <span className="flex items-center gap-1 text-emerald-600">
-            <CheckCircle2 className="w-3 h-3" /> Paid {format(new Date(bill.paid_date), 'MMM d')}
+            <CheckCircle2 className="w-3 h-3" /> Paid {formatDay(bill.paid_date, 'MMM d')}
           </span>
         )}
         {bill.transaction_id && (
@@ -111,7 +111,7 @@ export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay,
           </p>
         ) : (
           <p className="text-xs text-amber-700">
-            If this stays unpaid, app access will be paused from {format(new Date(lockDate), 'd MMM yyyy')}.
+            If this stays unpaid, app access will be paused from {formatDay(lockDate, 'd MMM yyyy')}.
           </p>
         )
       )}
@@ -151,7 +151,7 @@ export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay,
           </div>
         ) : lockRelevant ? (
           <p className="text-xs text-muted-foreground">
-            This flat will be locked out on {format(new Date(lockDate), 'd MMM yyyy')} if still unpaid.
+            This flat will be locked out on {formatDay(lockDate, 'd MMM yyyy')} if still unpaid.
           </p>
         ) : null
       )}
@@ -188,7 +188,7 @@ export default function BillCard({ bill, onMarkPaid, isAdmin, payEnabled, onPay,
           )}
           {bill.last_reminded_at && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Last reminded {format(new Date(bill.last_reminded_at), 'd MMM, h:mm a')}
+              <Clock className="w-3 h-3" /> Last reminded {formatIST(bill.last_reminded_at, 'd MMM, h:mm a')}
             </p>
           )}
         </div>

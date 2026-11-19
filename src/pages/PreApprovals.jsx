@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { formatDay } from '@/lib/ist';
 import { UserCheck, X, Repeat, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,8 @@ import {
 // Keep this in sync with PRE_APPROVAL_CATEGORIES in server/wgate-server.mjs.
 const CATEGORIES = ['Guest', 'Maid', 'Cook', 'Nanny', 'Driver', 'Delivery', 'Other'];
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Today's date in India (YYYY-MM-DD), whatever the phone's own time zone is. Matches the server.
+const todayStr = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
 
 function StatusBadge({ status }) {
   const active = status === 'active';
@@ -255,8 +256,8 @@ export default function PreApprovals() {
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   {r.frequency === 'daily' ? <Repeat className="w-3 h-3" /> : <CalendarDays className="w-3 h-3" />}
                   {r.frequency === 'daily'
-                    ? `${format(new Date(r.valid_from), 'd MMM')} – ${format(new Date(r.valid_until), 'd MMM yyyy')}`
-                    : format(new Date(r.valid_from), 'd MMM yyyy')}
+                   ? `${formatDay(r.valid_from, 'd MMM')} – ${formatDay(r.valid_until, 'd MMM yyyy')}`
+                    : formatDay(r.valid_from, 'd MMM yyyy')}
                 </p>
                 {(isAdmin || isGuard) && (
                   <p className="text-xs text-muted-foreground mt-1">Flat {r.flat_number || '—'} · {r.resident_email}</p>

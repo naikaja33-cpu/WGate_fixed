@@ -3,12 +3,13 @@ import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { wgate } from '@/api/wgateClient';
 import { saveFile } from '@/lib/saveFile';
+import { istDayOf } from '@/lib/ist';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
-const dayString = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const dayString = (d) => istDayOf(d); // India's date
 
 // Admin: choose a date range and download the visitor log as a CSV file.
 export default function ExportVisitorsDialog({ open, onOpenChange }) {

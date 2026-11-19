@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Pin, PinOff, Trash2, Megaphone, BookOpen, Calendar, Wrench, FileText } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatIST, formatDay } from '@/lib/ist';
 
 const typeConfig = {
   announcement: { label: 'Announcement', icon: Megaphone, color: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -55,10 +55,10 @@ export default function NoticeCard({ notice, isAdmin, onDelete, onTogglePin }) {
         <div className="flex items-center gap-3">
           {notice.event_date && (
             <span className="flex items-center gap-1 text-emerald-600 font-medium">
-              <Calendar className="w-3 h-3" /> {format(new Date(notice.event_date), 'MMM d, yyyy')}
+              <Calendar className="w-3 h-3" /> {formatDay(notice.event_date, 'MMM d, yyyy')}
             </span>
           )}
-          <span>{notice.created_date ? format(new Date(notice.created_date), 'MMM d') : ''}</span>
+          <span>{notice.created_date ? formatIST(notice.created_date, 'MMM d') : ''}</span>
         </div>
       </div>
     </div>

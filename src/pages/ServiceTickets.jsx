@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus } from 'lucide-react';
+import { Plus,Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TicketCard from '@/components/tickets/TicketCard';
 import AddTicketForm from '@/components/tickets/AddTicketForm';
+import ExportTicketsDialog from '@/components/tickets/ExportTicketsDialog';
 
 export default function ServiceTickets() {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ export default function ServiceTickets() {
   const isResident = role === 'tenant' || role === 'owner';
 
   const [showForm, setShowForm] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const queryClient = useQueryClient();
 
@@ -58,6 +60,15 @@ export default function ServiceTickets() {
           </Button>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setShowExport(true)}>
+            <Download className="w-4 h-4 mr-1" /> Export CSV
+          </Button>
+        </div>
+      )}
+      <ExportTicketsDialog open={showExport} onOpenChange={setShowExport} />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter}>
         <TabsList className="w-full bg-muted">

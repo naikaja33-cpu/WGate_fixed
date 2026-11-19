@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Clock, Phone, Car, Check, X, LogOut as LogOutIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
+import { formatIST } from '@/lib/ist';
 import ContactResident from '@/components/visitors/ContactResident';
 
 const statusStyles = {
@@ -61,7 +61,7 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
         )}
         {visitor.check_in_time && (
           <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
-            <Clock className="w-3 h-3" /> {format(new Date(visitor.check_in_time), 'd MMM, h:mm a')}
+            <Clock className="w-3 h-3" /> {formatIST(visitor.check_in_time, 'd MMM, h:mm a')}
           </span>
         )}
       </div>

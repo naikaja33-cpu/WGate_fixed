@@ -10,6 +10,7 @@ import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
 import { Link } from 'react-router-dom';
 import { useEnabledMenus } from '@/lib/useEnabledMenus';
+import { istDayOf, istToday } from '@/lib/ist';
 import { useHomeStyle } from '@/lib/homeStyle';
 import { effectiveStatus } from '@/lib/billing';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -137,7 +138,7 @@ export default function Dashboard() {
       {showVisitors && (
         <StatCard title="Today's Visitors" value={visitors.filter(v => {
           if (!v.check_in_time) return false;
-          return new Date(v.check_in_time).toDateString() === new Date().toDateString();
+          return istDayOf(v.check_in_time) === istToday();
         }).length} icon={Clock} color="bg-emerald-100 text-emerald-600" />
       )}
       {showTickets && (

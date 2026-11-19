@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
+import { istToday } from '@/lib/ist';
 import { fineForPayment } from '@/lib/billing';
 
 export default function MarkPaidModal({ bill, onConfirm, onClose, isLoading }) {
-  const [paidDate, setPaidDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [paidDate, setPaidDate] = useState(istToday());
   const [paymentMode, setPaymentMode] = useState('upi');
   const [transactionId, setTransactionId] = useState(bill.payment_claim?.utr || '');
   const [waiveFine, setWaiveFine] = useState(false);

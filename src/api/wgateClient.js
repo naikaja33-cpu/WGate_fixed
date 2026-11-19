@@ -292,6 +292,9 @@ const files = {
   visitors(from, to) {
     return request(`/export/visitors?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
   },
+  tickets(from, to, statuses) {
+    return request(`/export/tickets?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&status=${encodeURIComponent((statuses || []).join(','))}`);
+  },
 };
 const publicApi = {
   societies: {

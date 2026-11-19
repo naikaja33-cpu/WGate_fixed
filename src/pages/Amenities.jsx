@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { formatDay } from '@/lib/ist';
 import { CalendarClock, X, Check, Clock3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,8 @@ import {
 // the backend is the source of truth and will reject anything not in it.
 const AMENITIES = ['Clubhouse', 'Swimming Pool', 'Party Hall', 'Gym', 'Tennis Court'];
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Today's date in India (YYYY-MM-DD), whatever the phone's own time zone is. Matches the server.
+const todayStr = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
 
 function StatusBadge({ status }) {
   const styles = {
@@ -223,7 +224,7 @@ export default function Amenities() {
                     <StatusBadge status={b.status} />
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
+                    {formatDay(b.booking_date, 'd MMM yyyy')} · {b.start_time}–{b.end_time}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">Flat {b.flat_number || '—'} · {b.resident_email}</p>
                   {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}

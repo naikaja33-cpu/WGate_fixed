@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { format, addDays } from 'date-fns';
+import { toIST, formatDay } from '@/lib/ist';
 import { wgate } from '@/api/wgateClient';
 import { buildBillRows, formatMoney, formatSqft } from '@/lib/billing';
 
@@ -14,7 +15,7 @@ import { buildBillRows, formatMoney, formatSqft } from '@/lib/billing';
  *  - defaultRate:   the rate used last time (pre-filled)
  */
 export default function GenerateBillsModal({ onGenerate, onClose, isGenerating, areas, existingBills, defaultRate, defaultLateFine }) {
-  const now = new Date();
+  const now = toIST(); // India's today, whatever the phone's time zone is
   const [month, setMonth] = useState(format(now, 'yyyy-MM'));
   const [monthLabel, setMonthLabel] = useState(format(now, 'MMMM yyyy'));
   const [dueDate, setDueDate] = useState(format(addDays(now, 15), 'yyyy-MM-dd'));
@@ -87,7 +88,7 @@ export default function GenerateBillsModal({ onGenerate, onClose, isGenerating, 
             <Label className="text-xs">Month</Label>
             <Input type="month" value={month} onChange={(e) => {
               setMonth(e.target.value);
-              if (e.target.value) setMonthLabel(format(new Date(e.target.value + '-01'), 'MMMM yyyy'));
+              if (e.target.value) setMonthLabel(formatDay(e.target.value + '-01', 'MMMM yyyy'));
             }} />
           </div>
           <div className="space-y-1.5">

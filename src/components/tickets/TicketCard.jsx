@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { format } from 'date-fns';
+import { formatIST } from '@/lib/ist';
 import { Clock, ArrowRight, UserCheck } from 'lucide-react';
 import { useState } from 'react';
 
@@ -68,7 +68,7 @@ export default function TicketCard({ ticket, onUpdateStatus, isAdmin, isGuard })
           {ticket.created_date && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
-              {format(new Date(ticket.created_date), 'MMM d')}
+              {formatIST(ticket.created_date, 'MMM d')}
             </span>
           )}
         </div>
