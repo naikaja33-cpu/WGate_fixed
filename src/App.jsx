@@ -43,6 +43,8 @@ const Members = lazy(() => import('@/pages/Members'));
 const Billing = lazy(() => import('@/pages/Billing'));
 const DuesRestricted = lazy(() => import('@/pages/DuesRestricted'));
 const PrivacyPolicy = lazy(() => import('@/pages/PrivacyPolicy'));
+const Terms = lazy(() => import('@/pages/Terms'));
+const DeleteAccount = lazy(() => import('@/pages/DeleteAccount'));
 const ForceChangePassword = lazy(() => import('@/pages/ForceChangePassword'));
 const SuperAdminDashboard = lazy(() => import('@/pages/SuperAdminDashboard'));
 const NoticeBoard = lazy(() => import('@/pages/NoticeBoard'));
@@ -91,6 +93,8 @@ const AuthenticatedApp = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/s/:code" element={<Login />} />
          <Route path="/privacy" element={<PrivacyPolicy />} />
+         <Route path="/terms" element={<Terms />} />
+        <Route path="/delete-account" element={<DeleteAccount />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/faq" element={<FAQ />} />
@@ -128,6 +132,8 @@ const AuthenticatedApp = () => {
             <Route path="/signup" element={<Navigate to={homePath} replace />} />
       <Route path="/s/:code" element={<Navigate to={homePath} replace />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/delete-account" element={<DeleteAccount />} />
       <Route path="/about" element={<AboutUs />} />
       <Route path="/contact" element={<ContactUs />} />
       <Route path="/faq" element={<FAQ />} />

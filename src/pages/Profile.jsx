@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { User, Phone, Home, Mail, Shield, LogOut } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import FamilySection from '@/components/family/FamilySection';
+import DeleteAccountSection from '@/components/account/DeleteAccountSection';
 
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth();
@@ -100,7 +101,7 @@ export default function Profile() {
       >
         <LogOut className="w-4 h-4 mr-2" /> Sign Out
       </Button>
-
+ <DeleteAccountSection />
       {/* <p className="text-center text-xs text-muted-foreground">
         <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
       </p> */}

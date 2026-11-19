@@ -194,6 +194,12 @@ const [agreed, setAgreed] = useState(false);
           Your society starts on a 14-day trial, which begins once a super admin approves your signup. You won&apos;t be able to sign in until then.
         </p>
 
+        <p className="text-xs text-muted-foreground">
+          By creating a society you agree to our{' '}
+          <Link to="/terms" target="_blank" className="text-primary underline">Terms of Use</Link>
+          {' '}and{' '}
+          <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>.
+        </p>
         {/* <label className="flex items-start gap-2 text-xs text-muted-foreground">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
           <span>

@@ -6,6 +6,8 @@ const LINKS = [
   { to: '/contact', label: 'Contact Us' },
   { to: '/faq', label: 'FAQ' },
   { to: '/privacy', label: 'Privacy Policy' },
+  { to: '/terms', label: 'Terms of Service' },
+  { to: '/delete-account', label: 'Delete Account' },
 ];
 
 export default function SiteFooter() {

@@ -100,6 +100,11 @@ const auth = {
     return request('/auth/me', { method: 'PATCH', body: data });
   },
 
+  // Deletes the signed-in member's own account (needs their password).
+  async deleteAccount(password) {
+    return request('/auth/delete-account', { method: 'POST', body: { password } });
+  },
+
   async changePassword(currentPassword, newPassword) {
     return request('/auth/change-password', {
       method: 'POST',
@@ -305,6 +310,10 @@ const publicApi = {
   // The festival / welcome banner (no sign-in needed).
   async announcement() {
     return request('/public/announcement', { auth: false });
+  },
+  // Ask for an account to be deleted (no sign-in needed).
+  async requestDeletion(data) {
+    return request('/public/delete-request', { method: 'POST', body: data, auth: false });
   },
 };
 

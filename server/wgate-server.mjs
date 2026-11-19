@@ -1866,6 +1866,88 @@ app.post('/api/auth/forgot-password',forgotPasswordLimit, wrap(async (req, res) 
   }
   res.json(genericResponse);
 }));
+/* ------------------------- account deletion ------------------------- */
+// Google Play needs two things: a way to delete your account inside the app, and a web page to ask for it.
+const deleteAccountLimit = rateLimit({
+  windowMs: 15 * MINUTE, max: 5, keyFn: (req) => `delacct:${req.user?.id || clientIp(req)}`,
+  message: 'Too many attempts. Please wait a few minutes and try again.',
+});
+const deleteRequestLimit = rateLimit({
+  windowMs: HOUR, max: 5, keyFn: (req) => `delreq:${clientIp(req)}`,
+  message: 'Too many requests. Please try again later.',
+});
+
+// A signed-in member deletes their own account. Needs their password. (The /api/auth/ path stays open even when dues are overdue.)
+app.post('/api/auth/delete-account', requireAuth, deleteAccountLimit, wrap(async (req, res) => {
+  const user = req.user;
+  const schema = req.schemaName;
+  if (!schema) return res.status(400).json({ message: 'This account cannot be deleted here. Please contact support.' });
+  if (!verifyPassword(String(req.body?.password || ''), user.password_hash)) {
+    return res.status(400).json({ message: 'Password is incorrect' });
+  }
+  const users = await listEntity(schema, 'User');
+  if (user.role === 'admin') {
+    const otherAdmins = users.filter((u) => u.role === 'admin' && u.id !== user.id && !u.disabled);
+    if (otherAdmins.length === 0) {
+      return res.status(400).json({
+        message: 'You are the only admin of this society. Make another member an admin first, or ask WGate support to close the society.',
+      });
+    }
+  }
+  // The person, plus (for an owner or tenant) the family members who sign in under them.
+  const doomed = [user, ...(isPrimaryResident(user) ? users.filter((u) => u.role === 'family' && u.parent_user_id === user.id) : [])];
+  for (const u of doomed) {
+    await deleteEntityRecord(schema, 'User', u.id);
+    await pool.query('DELETE FROM sessions WHERE user_id = $1', [u.id]);
+    await pool.query('DELETE FROM push_tokens WHERE schema_name = $1 AND user_id = $2', [schema, String(u.id)]);
+  }
+  // Posts on the community board are personal content, so they go too.
+  await pool.query(
+    `DELETE FROM "${schema}".entity_records WHERE entity = 'ClassifiedPost' AND data->>'created_by_id' = ANY($1::text[])`,
+    [doomed.map((u) => String(u.id))]
+  );
+  authCache.clear();
+  doomed.forEach((u) => broadcast(schema, 'User', 'delete', u));
+  if (user.email) {
+    sendEmail({
+      to: user.email,
+      ...buildInfoEmail({
+        subject: 'Your WGate account has been deleted',
+        title: 'Your account has been deleted',
+        intro: 'You deleted your WGate account. Your personal details, sign-ins and community posts have been removed. Records that belong to your society, such as bills and the visitor log, stay with the society for a limited time.',
+        footer: 'If you did not do this, please contact your society admin or WGate support right away.',
+      }),
+    }).catch(() => {});
+  }
+  res.json({ success: true });
+}));
+
+// Anyone (even someone who cannot sign in) can ask for their account to be deleted. The super admin gets an email.
+app.post('/api/public/delete-request', deleteRequestLimit, wrap(async (req, res) => {
+  const email = normEmail(req.body?.email);
+  const code = String(req.body?.society_code || '').trim().slice(0, 20);
+  const note = String(req.body?.note || '').trim().slice(0, 500);
+  if (!email || email.length > 200 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ message: 'Enter a valid email address' });
+  }
+  const received = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+  console.log(`[wgate-api] Account deletion request received for ${email}`);
+  const recipients = await superadminRecipients();
+  if (recipients.length) {
+    const mail = buildInfoEmail({
+      subject: `Account deletion request: ${email}`,
+      title: 'Account deletion request',
+      intro: 'Someone asked for their WGate account and data to be deleted. Check that the request is genuine before you delete anything, for example by replying to the email address below.',
+      rows: [['Email', email], ['Society code', code || '-'], ['Note', note || '-'], ['Received (IST)', received]],
+      footer: 'The request must be completed within 30 days, as the Privacy Policy says.',
+    });
+    for (const to of recipients) sendEmail({ to, ...mail }).catch(() => {});
+  } else {
+    console.warn('[wgate-api] A deletion request came in but no super admin email is set to receive it');
+  }
+  res.json({ success: true });
+}));
+
 function inviteEmailContent({ name, societyName, email, password, role }) {
   const loginUrl = APP_URL ? `${APP_URL}/#/` : '';
   const subject = `You've been added to ${societyName} on WGate`;

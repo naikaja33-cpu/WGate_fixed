@@ -8,6 +8,11 @@ export const SITE = {
   phone: '+91 8073939280',          // shown on the Contact page
   hours: 'Mon to Sun, 10 AM to 7 PM IST',
   address: 'Bangalore, Karnataka, India',
+  // Used on the Privacy Policy, Terms and Delete Account pages. Replace these before you publish.
+  // legalName: 'YOUR NAME OR COMPANY NAME',
+  // grievanceOfficer: 'YOUR NAME',
+  // privacyEmail: 'privacy@your-domain.com', // a mailbox you read
+  // fullAddress: 'Your full address, Bangalore, Karnataka, PIN, India',
 };
 // ---------------------------------------
 
