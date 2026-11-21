@@ -1282,9 +1282,9 @@ async function notifyAboutNewRecord(schemaName, entity, r) {
   const common = { excludeId: r.created_by_id };
   if (entity === 'AmenityBooking') {
     return notifyStaff(schemaName, {
-      ...common, adminsOnly: true, type: 'amenity', url: '/Amenities',
+      ...common, type: 'amenity', url: '/Amenities',
       title: 'New amenity booking request',
-      body: `${who} asked for the ${r.amenity} on ${prettyDay(r.booking_date)}, ${r.start_time}-${r.end_time}. Tap to approve or reject.`,
+      body: `${who} asked for the ${r.amenity} on ${prettyDay(r.booking_date)}, ${r.start_time}-${r.end_time}. Waiting for approval.`,
     });
   }
   if (entity === 'PreApproval') {
@@ -1303,11 +1303,26 @@ async function notifyAboutNewRecord(schemaName, entity, r) {
   }
   if (entity === 'ServiceTicket') {
     return notifyStaff(schemaName, {
-      ...common, adminsOnly: true, type: 'ticket', url: '/ServiceTickets',
+         ...common, type: 'ticket', url: '/ServiceTickets',
       title: 'New service ticket',
       body: `${who}: ${r.title || 'New request'}${r.priority ? ` (${r.priority} priority)` : ''}.`,
     });
   }
+}
+
+// The admin approved or rejected a booking: tell the resident who asked for it.
+async function notifyBookingDecision(schemaName, before, after) {
+  if (before.status === after.status || !['confirmed', 'rejected'].includes(after.status)) return;
+  const users = await listEntity(schemaName, 'User');
+  const owner = users.find((u) => !u.disabled && u.email && after.resident_email && normEmail(u.email) === normEmail(after.resident_email));
+  if (!owner) return;
+  const approved = after.status === 'confirmed';
+  await sendPushToUsers(schemaName, [owner.id], {
+    title: approved ? 'Amenity booking approved' : 'Amenity booking rejected',
+    body: `Your ${after.amenity} booking on ${prettyDay(after.booking_date)}, ${after.start_time}-${after.end_time} was ${approved ? 'approved' : 'rejected'}.`,
+    data: { type: 'amenity', url: '/Amenities' },
+    channelId: 'updates',
+  });
 }
 
 const sseClients = new Map(); // res -> schemaName
@@ -3779,6 +3794,10 @@ async function updateHandler(req, res) {
     }
   }
   res.json(clean(entity, updated));
+  // Fire-and-forget: tell the resident when an admin approves or rejects their amenity booking.
+  if (entity === 'AmenityBooking' && req.user.role === 'admin') {
+    notifyBookingDecision(req.schemaName, record, updated).catch((err) => console.error('[push] booking decision notify failed:', err.message));
+  }
   // // Fire-and-forget: notify the resident over WhatsApp the moment their
   // // ticket is actually closed (not on every edit — only on the transition
   // // into resolved/closed), using the phone number on their own User record.

@@ -96,7 +96,7 @@ export function NotificationProvider({ children }) {
         })
       );
     };
-    watchNew('AmenityBooking', role === 'admin', (r) => ({
+ watchNew('AmenityBooking', isStaffUser, (r) => ({
       title: 'New Amenity Booking', type: 'amenity',
       message: `🏊 ${who(r)} asked for the ${r.amenity} on ${r.booking_date}, ${r.start_time}–${r.end_time}`,
     }));
@@ -108,10 +108,28 @@ export function NotificationProvider({ children }) {
       title: 'New Gate Pass', type: 'gatepass',
       message: `🎫 ${who(r)} made a gate pass for ${r.visitor_name} on ${r.valid_date}`,
     }));
-    watchNew('ServiceTicket', role === 'admin', (r) => ({
+    watchNew('ServiceTicket', isStaffUser, (r) => ({
       title: 'New Service Ticket', type: 'ticket',
       message: `🔧 ${who(r)}: ${r.title || 'New request'}`,
     }));
+
+    // The admin approved or rejected a booking I asked for.
+    if (isResident) {
+      const shown = {}; // booking id -> the decision already shown, so the same one never appears twice
+      extraUnsubs.push(
+        wgate.entities.AmenityBooking.subscribe((event) => {
+          if (event.type !== 'update' || !event.data) return;
+          const b = event.data;
+          const mine = user.email && b.resident_email && String(b.resident_email).toLowerCase() === String(user.email).toLowerCase();
+          if (!mine || !['confirmed', 'rejected'].includes(b.status) || shown[b.id] === b.status) return;
+          shown[b.id] = b.status;
+          const approved = b.status === 'confirmed';
+          const msg = `${approved ? '✅' : '❌'} Your ${b.amenity} booking on ${b.booking_date}, ${b.start_time}–${b.end_time} was ${approved ? 'approved' : 'rejected'}`;
+          addNotification({ title: approved ? 'Booking Approved' : 'Booking Rejected', message: msg, type: 'amenity' });
+          toast[approved ? 'success' : 'error'](msg, { duration: 6000 });
+        })
+      );
+    }
 
     return () => {
       unsubVisitor();
