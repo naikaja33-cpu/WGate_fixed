@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Shield, Home } from 'lucide-react';
+import Logo from '@/components/Logo';
 
 export default function Onboarding({ onComplete }) {
   const { user } = useAuth();
@@ -40,9 +41,7 @@ export default function Onboarding({ onComplete }) {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto">
-            <Shield className="w-8 h-8 text-primary-foreground" />
-          </div>
+          <Logo size={64} className="mx-auto rounded-2xl" />
           <h1 className="text-2xl font-bold text-foreground">Welcome to MySociety</h1>
           <p className="text-sm text-muted-foreground">Select your society and flat to get started</p>
         </div>

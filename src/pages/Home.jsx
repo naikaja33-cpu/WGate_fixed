@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield,Download ,Smartphone, Apple} from 'lucide-react';
+import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import SiteFooter from '@/components/SiteFooter';
 import HeroPhone from '@/components/HeroPhone';
@@ -34,9 +35,7 @@ export default function Home() {
     <div className="min-h-screen bg-white">
       <header className="border-b border-border px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Shield className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <Logo size={32} />
           <span className="font-bold text-lg text-foreground">WGate</span>
         </div>
         <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, ArrowLeft } from 'lucide-react';
+import Logo from '@/components/Logo';
 import SiteFooter from '@/components/SiteFooter';
 import WhatsAppChat from '@/components/WhatsAppChat';
 import { useAuth } from '@/lib/AuthContext';
@@ -13,9 +14,7 @@ export default function InfoShell({ title, intro, children }) {
     <div className="flex min-h-screen flex-col bg-white">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between border-b border-border px-6 py-4">
         <Link to={isAuthenticated ? '/Dashboard' : '/'} className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <Logo size={32} />
           <span className="text-lg font-bold text-foreground">WGate</span>
         </Link>
         <button onClick={goBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">

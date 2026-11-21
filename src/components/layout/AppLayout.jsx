@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Wrench, User, UserCog, Shield, LogOut, IndianRupee, Bell, CalendarClock, UserCheck, KeyRound, Store } from 'lucide-react';
+import Logo from '@/components/Logo';
 import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
@@ -80,9 +81,7 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">
       <Link to={role === 'guard' ? '/Visitors' : '/Dashboard'} className="flex items-center gap-2" aria-label="Go to home">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Shield className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <Logo size={32} />
           <span className="font-semibold text-foreground text-lg truncate max-w-[9rem] sm:max-w-xs" title={user?.society_name || 'MySociety'}>{user?.society_name || 'MySociety'}</span>
         </Link>
         <div className="flex items-center gap-1">

@@ -2,8 +2,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
+import Logo from "@/components/Logo";
 
-export default function AuthLayout({ icon: Icon, title, subtitle, footer, children }) {
+export default function AuthLayout({ title, subtitle, footer, children }) {
   // On the website the logo links to the public home page; the Android app has no such page.
   const isNative = Capacitor.isNativePlatform();
   const Brand = isNative ? "div" : Link;
@@ -13,8 +14,8 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
                     <Brand {...brandProps} className="block">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4">
-              <Icon className="w-7 h-7 text-primary-foreground" aria-hidden="true" />
+            <div className="flex justify-center mb-4">
+              <Logo size={64} className="rounded-2xl" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
           </Brand>
