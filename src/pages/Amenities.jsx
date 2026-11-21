@@ -275,7 +275,7 @@ export default function Amenities() {
                   <StatusBadge status={b.status} />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {format(new Date(b.booking_date), 'd MMM yyyy')} · {b.start_time}–{b.end_time}
+                  {formatDay(b.booking_date, 'd MMM yyyy')} · {b.start_time}–{b.end_time}
                 </p>
                 {isAdmin && <p className="text-xs text-muted-foreground mt-1">Flat {b.flat_number || '—'} · {b.resident_email}</p>}
                 {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}
