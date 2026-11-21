@@ -11,12 +11,18 @@ const typeConfig = {
   other: { label: 'Other', icon: FileText, color: 'bg-muted text-muted-foreground border-border' },
 };
 
-export default function NoticeCard({ notice, isAdmin, onDelete, onTogglePin }) {
+export default function NoticeCard({ notice, isAdmin, onDelete, onTogglePin, onOpen }) {
   const config = typeConfig[notice.type] || typeConfig.other;
   const Icon = config.icon;
 
   return (
-    <div className={`bg-card rounded-2xl border p-4 space-y-2 transition-all hover:shadow-md ${notice.is_pinned ? 'border-primary/30 bg-accent/20' : 'border-border'}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.(); } }}
+      className={`bg-card rounded-2xl border p-4 space-y-2 transition-all hover:shadow-md cursor-pointer active:scale-[0.99] ${notice.is_pinned ? 'border-primary/30 bg-accent/20' : 'border-border'}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2 flex-1 min-w-0">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${config.color.split(' ').slice(0,2).join(' ')}`}>
@@ -37,18 +43,19 @@ export default function NoticeCard({ notice, isAdmin, onDelete, onTogglePin }) {
         {isAdmin && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary"
-              onClick={onTogglePin} title={notice.is_pinned ? 'Unpin' : 'Pin'}>
+              onClick={(e) => { e.stopPropagation(); onTogglePin(); }} title={notice.is_pinned ? 'Unpin' : 'Pin'}>
               {notice.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
             </Button>
             <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              onClick={onDelete}>
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}>
               <Trash2 className="w-3.5 h-3.5" />
             </Button>
           </div>
         )}
       </div>
 
-      <p className="text-sm text-muted-foreground leading-relaxed pl-10">{notice.content}</p>
+      <p className="text-sm text-muted-foreground leading-relaxed pl-10 line-clamp-3">{notice.content}</p>
+      <p className="pl-10 text-xs font-medium text-primary">Tap to read</p>
 
       <div className="flex items-center justify-between pl-10 text-xs text-muted-foreground">
         <span>By {notice.posted_by || 'Admin'}</span>

@@ -113,6 +113,12 @@ export function NotificationProvider({ children }) {
       message: `🔧 ${who(r)}: ${r.title || 'New request'}`,
     }));
 
+    // A new notice was posted: tapping it in the bell opens the notice itself.
+    watchNew('Notice', true, (r) => ({
+      title: 'New Notice', type: 'notice', link: `/NoticeBoard?open=${r.id}`,
+      message: `📢 ${r.title || 'A new notice was posted'}`,
+    }));
+
     // The admin approved or rejected a booking I asked for.
     if (isResident) {
       const shown = {}; // booking id -> the decision already shown, so the same one never appears twice

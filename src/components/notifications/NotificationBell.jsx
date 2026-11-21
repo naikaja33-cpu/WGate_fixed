@@ -1,6 +1,7 @@
 import { Bell } from 'lucide-react';
 import { useNotifications } from './NotificationProvider';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,6 +10,16 @@ import { formatDistanceToNow } from 'date-fns';
 export default function NotificationBell() {
   const { notifications, unreadCount, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Where tapping a notification goes
+  const goTo = (n) => {
+    const routes = { visitor: '/Visitors', amenity: '/Amenities', preapproval: '/PreApprovals', gatepass: '/GatePasses', ticket: '/ServiceTickets', notice: '/NoticeBoard' };
+    const to = n.link || routes[n.type];
+    if (!to) return;
+    setOpen(false);
+    navigate(to);
+  };
 
   const handleOpen = (val) => {
     setOpen(val);
@@ -48,10 +59,17 @@ export default function NotificationBell() {
           ) : (
             <div className="divide-y divide-border">
               {notifications.map((n) => (
-                <div key={n.id} className={`px-4 py-3 transition-colors ${!n.read ? 'bg-accent/40' : ''}`}>
+                <div
+                  key={n.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => goTo(n)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') goTo(n); }}
+                  className={`px-4 py-3 transition-colors cursor-pointer hover:bg-accent/60 ${!n.read ? 'bg-accent/40' : ''}`}
+                >
                   <div className="flex items-start gap-2">
                     <span className="text-base mt-0.5">
-                     {{ visitor: '🚶', amenity: '🏊', preapproval: '✅', gatepass: '🎫' }[n.type] || '🔧'}
+                    {{ visitor: '🚶', amenity: '🏊', preapproval: '✅', gatepass: '🎫', notice: '📢' }[n.type] || '🔧'}
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-foreground">{n.title}</p>

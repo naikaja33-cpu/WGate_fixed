@@ -1308,6 +1308,21 @@ async function notifyAboutNewRecord(schemaName, entity, r) {
       body: `${who}: ${r.title || 'New request'}${r.priority ? ` (${r.priority} priority)` : ''}.`,
     });
   }
+  // A notice was posted: every member of the society gets it, except the person who posted it.
+  if (entity === 'Notice') {
+    if (!fcm) return;
+    const users = await listEntity(schemaName, 'User');
+    const ids = users
+      .filter((u) => !u.disabled && (r.created_by_id == null || String(u.id) !== String(r.created_by_id)))
+      .map((u) => u.id);
+    const text = String(r.content || '').replace(/\s+/g, ' ').trim();
+    await sendPushToUsers(schemaName, ids, {
+      title: r.title || 'New notice',
+      body: text ? (text.length > 120 ? `${text.slice(0, 117)}...` : text) : 'Tap to read',
+      data: { type: 'notice', url: `/NoticeBoard?open=${r.id}` },
+      channelId: 'updates',
+    });
+  }
 }
 
 // The admin approved or rejected a booking: tell the resident who asked for it.

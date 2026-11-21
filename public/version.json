@@ -1,6 +1,6 @@
 {
-  "versionCode": 22,
-  "versionName": "1.22",
+  "versionCode": 23,
+  "versionName": "1.23",
   "minVersionCode": 22,
-  "notes": "IST,QR,QR Code,Visitor,Ticket,Export CSV"
+  "notes": "Notification"
 }

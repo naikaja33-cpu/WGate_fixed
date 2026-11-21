@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { formatIST, formatDay } from '@/lib/ist';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
@@ -15,6 +18,8 @@ export default function NoticeBoard() {
   const [showAdd, setShowAdd] = useState(false);
   const [typeFilter, setTypeFilter] = useState('all');
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [openId, setOpenId] = useState(null);
 
   const { data: notices = [], isLoading } = useQuery({
     queryKey: ['notices', user?.society_id],
@@ -44,6 +49,13 @@ export default function NoticeBoard() {
     mutationFn: ({ id, is_pinned }) => wgate.entities.Notice.update(id, { is_pinned: !is_pinned }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notices'] }),
   });
+
+  // The notice being read: tapped on a card, or opened from the bell (…/NoticeBoard?open=ID)
+  const selected = notices.find((n) => String(n.id) === String(openId || searchParams.get('open'))) || null;
+  const closeNotice = () => {
+    setOpenId(null);
+    if (searchParams.get('open')) setSearchParams({}, { replace: true });
+  };
 
   const filtered = typeFilter === 'all' ? notices : notices.filter(n => n.type === typeFilter);
   const pinned = filtered.filter(n => n.is_pinned);
@@ -84,8 +96,8 @@ export default function NoticeBoard() {
           {pinned.length > 0 && (
             <>
               <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1"><Pin className="w-3 h-3" /> PINNED</p>
-              {pinned.map(n => (
-                <NoticeCard key={n.id} notice={n} isAdmin={isAdmin}
+{pinned.map(n => (
+                <NoticeCard key={n.id} notice={n} isAdmin={isAdmin} onOpen={() => setOpenId(n.id)}
                   onDelete={() => deleteMutation.mutate(n.id)}
                   onTogglePin={() => togglePinMutation.mutate({ id: n.id, is_pinned: n.is_pinned })} />
               ))}
@@ -93,13 +105,35 @@ export default function NoticeBoard() {
             </>
           )}
           {unpinned.map(n => (
-            <NoticeCard key={n.id} notice={n} isAdmin={isAdmin}
+            <NoticeCard key={n.id} notice={n} isAdmin={isAdmin} onOpen={() => setOpenId(n.id)}
               onDelete={() => deleteMutation.mutate(n.id)}
               onTogglePin={() => togglePinMutation.mutate({ id: n.id, is_pinned: n.is_pinned })} />
           ))}
         </div>
       )}
 </div>
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) closeNotice(); }}>
+        <DialogContent className="max-w-lg rounded-2xl">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-left leading-snug pr-6">{selected.title}</DialogTitle>
+              </DialogHeader>
+              <div className="max-h-[60vh] overflow-y-auto pr-1">
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap break-words">{selected.content}</p>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-0.5">
+                {selected.event_date && <p>Event date: {formatDay(selected.event_date, 'd MMM yyyy')}</p>}
+                <p>
+                  By {selected.posted_by || 'Admin'}
+                  {selected.created_date ? ` · ${formatIST(selected.created_date, 'd MMM yyyy, h:mm a')}` : ''}
+                </p>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {showAdd && (
         <AddNoticeModal
           onSubmit={(data) => createMutation.mutate(data)}
