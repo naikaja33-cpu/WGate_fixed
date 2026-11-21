@@ -47,6 +47,14 @@ export default function PushSetup() {
           visibility: 1,
           vibration: true,
         });
+        await PushNotifications.createChannel({
+          id: 'updates',
+          name: 'Society updates',
+          description: 'New booking requests, pre-approvals, gate passes and service tickets',
+          importance: 4,
+          visibility: 1,
+          vibration: true,
+        });
         let perm = await PushNotifications.checkPermissions();
         if (perm.receive === 'prompt') perm = await PushNotifications.requestPermissions();
         if (perm.receive !== 'granted') return;

@@ -1259,6 +1259,57 @@ async function notifyVisitorAtGate(schemaName, visitor) {
   });
 }
 
+// Tell the society's admins (and guards) about something new that needs them. Never tells the person who did it.
+const prettyDay = (d) => {
+  const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(d || '');
+  return `${Number(m[3])} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m[2]) - 1]} ${m[1]}`;
+};
+
+async function notifyStaff(schemaName, { title, body, url, type, adminsOnly = false, excludeId = null }) {
+  if (!fcm) return;
+  const users = await listEntity(schemaName, 'User');
+  const ids = users
+    .filter((u) => (adminsOnly ? u.role === 'admin' : u.role === 'admin' || u.role === 'guard'))
+    .filter((u) => !u.disabled && (excludeId == null || String(u.id) !== String(excludeId)))
+    .map((u) => u.id);
+  await sendPushToUsers(schemaName, ids, { title, body, data: { type, url }, channelId: 'updates' });
+}
+
+// A new amenity booking, pre-approval, gate pass or service ticket was created.
+async function notifyAboutNewRecord(schemaName, entity, r) {
+  const who = `${r.resident_name || 'A resident'}${r.flat_number ? ` (Flat ${r.flat_number})` : ''}`;
+  const common = { excludeId: r.created_by_id };
+  if (entity === 'AmenityBooking') {
+    return notifyStaff(schemaName, {
+      ...common, adminsOnly: true, type: 'amenity', url: '/Amenities',
+      title: 'New amenity booking request',
+      body: `${who} asked for the ${r.amenity} on ${prettyDay(r.booking_date)}, ${r.start_time}-${r.end_time}. Tap to approve or reject.`,
+    });
+  }
+  if (entity === 'PreApproval') {
+    return notifyStaff(schemaName, {
+      ...common, type: 'preapproval', url: '/PreApprovals',
+      title: 'New pre-approval',
+      body: `${who} pre-approved ${r.visitor_name} (${r.category}) ${r.frequency === 'daily' ? `from ${prettyDay(r.valid_from)} to ${prettyDay(r.valid_until)}` : `on ${prettyDay(r.valid_from)}`}.`,
+    });
+  }
+  if (entity === 'GatePass') {
+    return notifyStaff(schemaName, {
+      ...common, type: 'gatepass', url: '/GatePasses',
+      title: 'New gate pass',
+      body: `${who} made a gate pass for ${r.visitor_name} on ${prettyDay(r.valid_date)}.`,
+    });
+  }
+  if (entity === 'ServiceTicket') {
+    return notifyStaff(schemaName, {
+      ...common, adminsOnly: true, type: 'ticket', url: '/ServiceTickets',
+      title: 'New service ticket',
+      body: `${who}: ${r.title || 'New request'}${r.priority ? ` (${r.priority} priority)` : ''}.`,
+    });
+  }
+}
+
 const sseClients = new Map(); // res -> schemaName
 
 function broadcast(schemaName, entity, type, record) {
@@ -3637,6 +3688,9 @@ entityRouter.post('/:name', wrap(async (req, res) => {
     if (entity === 'Visitor' && record.status === 'pending') {
       notifyVisitorAtGate(req.schemaName, record).catch((err) => console.error('[push] visitor notify failed:', err.message));
     }
+
+    // Fire-and-forget: tell admins and guards about new bookings, pre-approvals, gate passes and tickets.
+    notifyAboutNewRecord(req.schemaName, entity, record).catch((err) => console.error('[push] staff notify failed:', err.message));
 
     // // Fire-and-forget: notify the society's configured WhatsApp number
     // // about the new ticket. Never awaited — a slow/failed WhatsApp send

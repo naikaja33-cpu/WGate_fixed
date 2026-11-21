@@ -51,7 +51,7 @@ export default function NotificationBell() {
                 <div key={n.id} className={`px-4 py-3 transition-colors ${!n.read ? 'bg-accent/40' : ''}`}>
                   <div className="flex items-start gap-2">
                     <span className="text-base mt-0.5">
-                      {n.type === 'visitor' ? '🚶' : '🔧'}
+                     {{ visitor: '🚶', amenity: '🏊', preapproval: '✅', gatepass: '🎫' }[n.type] || '🔧'}
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-foreground">{n.title}</p>

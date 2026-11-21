@@ -79,10 +79,45 @@ export function NotificationProvider({ children }) {
       }
     });
 
+    // New things that need an admin or a guard: a booking request, a pre-approval, a gate pass, a service ticket.
+    // The person who made it is not told about their own action.
+    const isStaffUser = role === 'admin' || role === 'guard';
+    const notMine = (r) => !r.created_by_id || String(r.created_by_id) !== String(user.id);
+    const who = (r) => `${r.resident_name || 'A resident'}${r.flat_number ? ` (Flat ${r.flat_number})` : ''}`;
+    const extraUnsubs = [];
+    const watchNew = (entityName, allowed, build) => {
+      if (!allowed) return;
+      extraUnsubs.push(
+        wgate.entities[entityName].subscribe((event) => {
+          if (event.type !== 'create' || !event.data || !notMine(event.data)) return;
+          const n = build(event.data);
+          addNotification(n);
+          toast.info(n.message, { duration: 6000 });
+        })
+      );
+    };
+    watchNew('AmenityBooking', role === 'admin', (r) => ({
+      title: 'New Amenity Booking', type: 'amenity',
+      message: `🏊 ${who(r)} asked for the ${r.amenity} on ${r.booking_date}, ${r.start_time}–${r.end_time}`,
+    }));
+    watchNew('PreApproval', isStaffUser, (r) => ({
+      title: 'New Pre-approval', type: 'preapproval',
+      message: `✅ ${who(r)} pre-approved ${r.visitor_name} (${r.category})`,
+    }));
+    watchNew('GatePass', isStaffUser, (r) => ({
+      title: 'New Gate Pass', type: 'gatepass',
+      message: `🎫 ${who(r)} made a gate pass for ${r.visitor_name} on ${r.valid_date}`,
+    }));
+    watchNew('ServiceTicket', role === 'admin', (r) => ({
+      title: 'New Service Ticket', type: 'ticket',
+      message: `🔧 ${who(r)}: ${r.title || 'New request'}`,
+    }));
+
     return () => {
       unsubVisitor();
       unsubTicket();
       unsubVisitorUpdate();
+      extraUnsubs.forEach((unsub) => unsub());
     };
   }, [user]);
   // Keep every open screen's data fresh in real time — whenever anything
