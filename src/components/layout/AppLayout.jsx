@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useEnabledMenus, MENU_KEYS } from '@/lib/useEnabledMenus';
 import { useHomeStyle } from '@/lib/homeStyle';
-
+import { useSocietyTheme } from '@/lib/useSocietyTheme';
 // Residents and the admin get five big buttons. The other pages (Pre-Approve, Gate Pass, Amenities,
 // Notices, Community, Members) are reached from the tabs on the Home screen. `match` lists the pages
 // that keep a button highlighted, so people always see which area they are in.
@@ -60,6 +60,7 @@ export default function AppLayout() {
   const { user, logout } = useAuth();
   const role = user?.role || 'resident';
   const { enabledMenus, isLoaded } = useEnabledMenus();
+  useSocietyTheme(); // applies the colour theme the super admin chose for this society
 
   // People can switch the Home screen between the tabs look and the classic look.
   const [homeStyle] = useHomeStyle();
@@ -78,7 +79,7 @@ export default function AppLayout() {
   const isBlocked = !!enabledMenus && !!normalizedKey && !enabledMenus.includes(normalizedKey);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+   <div className="min-h-screen bg-background app-bg flex flex-col">
       <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between sticky top-0 z-30">
       <Link to={role === 'guard' ? '/Visitors' : '/Dashboard'} className="flex items-center gap-2" aria-label="Go to home">
           <Logo size={32} />

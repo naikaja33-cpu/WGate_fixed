@@ -2477,6 +2477,34 @@ app.put('/api/superadmin/societies/:id/menus', requireAuth, requireSuperadmin, w
     menuCache.delete(schemaName); // apply the change immediately
   res.json({ success: true, enabled_menus: enabled });
 }));
+// The super admin picks a colour theme for a society. Stored in its SocietySettings record.
+const THEME_IDS = ['default', 'aurora', 'lagoon', 'coral', 'midnight'];
+app.put('/api/superadmin/societies/:id/theme', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  const theme = String(req.body?.theme || '');
+  if (!THEME_IDS.includes(theme)) {
+    return res.status(400).json({ message: `theme must be one of: ${THEME_IDS.join(', ')}` });
+  }
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ message: 'Society not found' });
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+
+  const schemaName = await getSocietySchemaName(society.id);
+  const [existing] = await listEntity(schemaName, 'SocietySettings');
+  if (existing) {
+    await updateEntityRecord(schemaName, 'SocietySettings', existing.id, {
+      ...existing,
+      theme,
+      updated_date: nowIso(),
+    });
+  } else {
+    await insertEntityRecord(schemaName, 'SocietySettings', {
+      ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
+      society_id: society.id,
+      theme,
+    });
+  }
+  res.json({ success: true, theme });
+}));
 app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);
   if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -2534,7 +2562,7 @@ app.get('/api/superadmin/societies', requireAuth, requireSuperadmin, wrap(async 
       .map(publicUser)
       .sort((a, b) => a.full_name.localeCompare(b.full_name));
         const [settings] = await listEntity(schemaName, 'SocietySettings');
-    return { ...s, admins, enabled_menus: settings?.enabled_menus ?? null };
+    return { ...s, admins, enabled_menus: settings?.enabled_menus ?? null, theme: settings?.theme ?? null };
   }));
   res.json(withAdmins.sort((a, b) => a.name.localeCompare(b.name)));
 }));

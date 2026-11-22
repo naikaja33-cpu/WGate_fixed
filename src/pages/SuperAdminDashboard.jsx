@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound,Menu } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound,Menu, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { toast } from 'sonner';
 import AnnouncementCard from '@/components/announcement/AnnouncementCard';
 import CityPicker from '@/components/CityPicker';
+import { THEMES } from '@/lib/themes';
 
 // Mirrors the backend's GRACE_DAYS (server/wgate-server.mjs) — how many
 // extra days a society keeps working after its trial date passes before
@@ -74,6 +75,7 @@ export default function SuperAdminDashboard() {
   const [showAddAdmin, setShowAddAdmin] = useState(null); // society id, or null
   const [credentialsModal, setCredentialsModal] = useState(null); // { title, email, password }
   const [menuSociety, setMenuSociety] = useState(null); // society whose menu access is being edited
+  const [themeSociety, setThemeSociety] = useState(null); // society whose colour theme is being chosen
     const [planSociety, setPlanSociety] = useState(null); // society whose plan is being changed
       const [clearDataSociety, setClearDataSociety] = useState(null); // society whose data is being cleared
   const loadSocieties = async () => {
@@ -347,6 +349,10 @@ export default function SuperAdminDashboard() {
                     <Menu className="w-3.5 h-3.5 mr-1.5" />
                     Menu Access
                   </Button>
+                  <Button variant="outline" size="sm" className="col-span-2" onClick={() => setThemeSociety(society)}>
+                    <Palette className="w-3.5 h-3.5 mr-1.5" />
+                    Colour Theme
+                  </Button>
                 </div>
                 <Button
                   variant="outline"
@@ -391,6 +397,16 @@ export default function SuperAdminDashboard() {
           onCreated={(creds) => {
             setShowAddAdmin(null);
             setCredentialsModal({ title: 'Admin Created', ...creds });
+            loadSocieties();
+          }}
+        />
+      )}
+      {themeSociety && (
+        <ThemeModal
+          society={themeSociety}
+          onClose={() => setThemeSociety(null)}
+          onSaved={() => {
+            setThemeSociety(null);
             loadSocieties();
           }}
         />
@@ -784,6 +800,63 @@ function ClearDataModal({ society, onClose }) {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ThemeModal({ society, onClose, onSaved }) {
+  const [theme, setTheme] = useState(society.theme || 'default');
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setError('');
+    setIsSaving(true);
+    try {
+      await wgate.superadmin.updateSocietyTheme(society.id, theme);
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Something went wrong');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-card w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h2 className="text-lg font-semibold">Colour Theme</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose the look for {society.name}. Everyone in this society sees it the next time the app opens or refreshes.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTheme(t.id)}
+              disabled={isSaving}
+              className={`text-left rounded-2xl border-2 p-2 transition-colors ${theme === t.id ? 'border-primary bg-accent' : 'border-border'}`}
+            >
+              <div className="h-14 rounded-xl" style={{ background: t.preview }} />
+              <p className="text-sm font-semibold mt-2 leading-tight">{t.name}</p>
+              <p className="text-xs text-muted-foreground leading-tight">{t.note}</p>
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button type="button" className="flex-1" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </div>
     </div>
   );

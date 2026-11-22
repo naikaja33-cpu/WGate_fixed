@@ -203,6 +203,9 @@ const superadmin = {
     async updateSocietyMenus(id, enabledMenus) {
     return request(`/superadmin/societies/${id}/menus`, { method: 'PUT', body: { enabled_menus: enabledMenus } });
   },
+  async updateSocietyTheme(id, theme) {
+    return request(`/superadmin/societies/${id}/theme`, { method: 'PUT', body: { theme } });
+  },
   async createAdmin(data) {
     return request('/superadmin/admins', { method: 'POST', body: data });
   },

@@ -86,3 +86,95 @@
     @apply bg-background text-foreground font-inter;
   }
 }
+
+/* ===== Colour themes. The super admin picks one for each society. =====
+   No data-theme = the original look above. Each theme only changes colours. */
+.app-bg { background-image: var(--page-gradient, none); background-attachment: fixed; }
+
+:root[data-theme='aurora'] {
+  --background: 233 100% 97%;
+  --foreground: 244 47% 20%;
+  --card: 0 0% 100%;
+  --card-foreground: 244 47% 20%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 244 47% 20%;
+  --primary: 243 75% 59%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 244 67% 95%;
+  --secondary-foreground: 244 47% 20%;
+  --muted: 244 67% 95%;
+  --muted-foreground: 242 15% 49%;
+  --accent: 243 85% 95%;
+  --accent-foreground: 241 53% 47%;
+  --border: 243 49% 91%;
+  --input: 243 49% 91%;
+  --ring: 243 75% 59%;
+  --sidebar-primary: 243 75% 59%;
+  --page-gradient: linear-gradient(170deg, #E9ECFF 0%, #F3EEFF 55%, #FDF1F8 100%);
+}
+
+:root[data-theme='lagoon'] {
+  --background: 168 45% 94%;
+  --foreground: 179 69% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 179 69% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 179 69% 14%;
+  --primary: 174 83% 26%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 171 33% 92%;
+  --secondary-foreground: 179 69% 14%;
+  --muted: 171 33% 92%;
+  --muted-foreground: 182 22% 34%;
+  --accent: 168 53% 89%;
+  --accent-foreground: 174 79% 21%;
+  --border: 170 32% 86%;
+  --input: 170 32% 86%;
+  --ring: 174 83% 26%;
+  --sidebar-primary: 174 83% 26%;
+  --page-gradient: linear-gradient(170deg, #E1F6F1 0%, #E9F5FA 55%, #F2FAF0 100%);
+}
+
+:root[data-theme='coral'] {
+  --background: 23 100% 95%;
+  --foreground: 10 53% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 10 53% 16%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 10 53% 16%;
+  --primary: 13 78% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 20 75% 94%;
+  --secondary-foreground: 10 53% 16%;
+  --muted: 20 75% 94%;
+  --muted-foreground: 12 26% 38%;
+  --accent: 22 100% 91%;
+  --accent-foreground: 15 79% 34%;
+  --border: 19 61% 88%;
+  --input: 19 61% 88%;
+  --ring: 13 78% 48%;
+  --sidebar-primary: 13 78% 48%;
+  --page-gradient: linear-gradient(170deg, #FFEEE2 0%, #FFF4EE 55%, #FDEDF3 100%);
+}
+
+:root[data-theme='midnight'] {
+  --background: 226 49% 8%;
+  --foreground: 229 100% 97%;
+  --card: 228 49% 16%;
+  --card-foreground: 229 100% 97%;
+  --popover: 228 49% 16%;
+  --popover-foreground: 229 100% 97%;
+  --primary: 238 82% 65%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 230 50% 21%;
+  --secondary-foreground: 229 100% 97%;
+  --muted: 230 50% 21%;
+  --muted-foreground: 227 29% 69%;
+  --accent: 231 46% 25%;
+  --accent-foreground: 230 94% 82%;
+  --border: 229 40% 28%;
+  --input: 229 40% 28%;
+  --ring: 238 82% 65%;
+  --sidebar-primary: 238 82% 65%;
+  --page-gradient: linear-gradient(170deg, #0B1020 0%, #10173A 60%, #0F1F3A 100%);
+}
