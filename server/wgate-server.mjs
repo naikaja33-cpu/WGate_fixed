@@ -405,7 +405,8 @@ if (!process.env.DATABASE_URL) {
 const isLocalDb = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL);
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: isLocalDb ? false : { rejectUnauthorized: false },
+  // Checks Neon's certificate. If the server cannot connect after this change, set DB_SSL_VERIFY=false on Render and tell me.
+  ssl: isLocalDb ? false : { rejectUnauthorized: process.env.DB_SSL_VERIFY !== 'false' },
   // At most this many connections open at once (Neon's pooled address handles many more).
   max: Math.max(2, Number(process.env.DB_POOL_MAX) || 10),
   // Close a connection that sat unused for 30 seconds, so the pool never reuses one that Neon already dropped.
@@ -1353,7 +1354,11 @@ function broadcast(schemaName, entity, type, record) {
   }
   const payload = `data: ${JSON.stringify({ entity, type, id: record.id, data, timestamp: nowIso() })}\n\n`;
     for (const [client, info] of sseClients) {
-    if (info.schema === schemaName && canRead(info.user, entity, record)) client.write(payload);
+    if (info.schema === schemaName && canRead(info.user, entity, record)) {
+      client.write(entity === 'AmenityBooking'
+        ? `data: ${JSON.stringify({ entity, type, id: record.id, data: hideBookingDetails(info.user, entity, record), timestamp: nowIso() })}\n\n`
+        : payload);
+    }
   }
 }
 
@@ -1375,7 +1380,9 @@ function matchesCondition(actual, condition) {
         case '$lte': return actual <= expected;
         case '$exists': return (actual !== undefined && actual !== null) === Boolean(expected);
         case '$regex': {
-          try { return new RegExp(expected, 'i').test(String(actual ?? '')); } catch { return false; }
+          // Plain text search, not a pattern: a crafted pattern could freeze the whole server.
+          const needle = String(expected ?? '').slice(0, 100).toLowerCase();
+          return needle ? String(actual ?? '').toLowerCase().includes(needle) : true;
         }
         default: return false;
       }
@@ -1410,6 +1417,12 @@ function sortRecords(records, sort) {
 }
 
 const clean = (entity, record) => (entity === 'User' ? publicUser(record) : record);
+
+// Everyone may see which slots are taken, but only staff and the booking's own flat see who booked it and the notes.
+function hideBookingDetails(user, entity, r) {
+  if (entity !== 'AmenityBooking' || isStaff(user) || sameEmail(user, r) || sameFlat(user, r)) return r;
+  return { ...r, resident_email: '', resident_name: 'Another resident', notes: '' };
+}
 
 /* ------------------------------------------------------------------ */
 /* App                                                                */
@@ -1506,12 +1519,33 @@ app.disable('x-powered-by');
 // req.ip the real client address (otherwise every user shares the proxy's IP
 // and the limits would hit everyone at once). Set TRUST_PROXY=0 locally if needed.
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
-app.use(cors());
+// Only WGate's own website and the Android app may call the API from a browser. Add more with CORS_ORIGINS (comma separated).
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
+  'https://wwgate.in,https://www.wwgate.in,https://naikaja33-cpu.github.io,https://localhost,http://localhost,capacitor://localhost,http://localhost:5173')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+app.use(cors({ origin: (origin, cb) => cb(null, !origin || ALLOWED_ORIGINS.includes(origin)), maxAge: 600 }));
+// Basic security headers, and no caching of personal data.
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Strict-Transport-Security': 'max-age=15552000; includeSubDomains',
+    'Cross-Origin-Resource-Policy': 'cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  });
+  if (req.path.startsWith('/api/') && req.path !== '/api/ping' && req.path !== '/api/health') res.set('Cache-Control', 'no-store');
+  next();
+});
 // Shrinks JSON responses (lists, photos' text) before they travel. The live-updates stream is left alone.
 app.use(compression({
   filter: (req, res) => (req.originalUrl.startsWith('/api/events') ? false : compression.filter(req, res)),
 }));
-app.use(express.json({ limit: '10mb' }));
+// Small by default. Only visitors (the guard's photo) and community posts carry photos, so only they get the big limit.
+const smallJson = express.json({ limit: '100kb' });
+const photoJson = express.json({ limit: '10mb' });
+app.use((req, res, next) =>
+  (/^\/api\/entities\/(Visitor|ClassifiedPost)(\/|$)/.test(req.path) ? photoJson : smallJson)(req, res, next));
 
 // A safety net on top of the per-route limits: one signed-in account cannot pull data non-stop
 // (for example a stolen token running a scraper). Normal use stays far below this.
@@ -2012,7 +2046,7 @@ app.post('/api/public/delete-request', deleteRequestLimit, wrap(async (req, res)
     return res.status(400).json({ message: 'Enter a valid email address' });
   }
   const received = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  console.log(`[wgate-api] Account deletion request received for ${email}`);
+ console.log('[wgate-api] An account deletion request was received');
   const recipients = await superadminRecipients();
   if (recipients.length) {
     const mail = buildInfoEmail({
@@ -3505,7 +3539,15 @@ async function authorizeUpdate(req, res, entity, record, patch) {
     return WRITE_ROLES[entity].includes(user.role) ? body : denyWrite(res);
   }
   if (entity === 'ServiceTicket') {
-  if (user.role === 'admin' || user.role === 'guard') return body;
+  if (user.role === 'admin') return body;
+  if (user.role === 'guard') {
+    // Security can move a ticket along or assign it, nothing else.
+    const allowed = pickDefined(body, ['status', 'assigned_to']);
+    if (allowed.status !== undefined && !['open', 'in_progress', 'resolved', 'closed'].includes(allowed.status)) {
+      return denyWrite(res, 'Invalid ticket status');
+    }
+    return Object.keys(allowed).length ? allowed : denyWrite(res, 'Security can only change the status or the assignee of a ticket');
+  }
   return denyWrite(res, 'Only admins and security can update tickets');
 }
   if (entity === 'AmenityBooking') {
@@ -3607,6 +3649,39 @@ const enforceEntityAccess = wrap(async (req, res, next) => {
   }
   next();
 });
+// Length and format limits for text fields, so nobody can stuff huge text into records. Photos have their own checks.
+const FIELD_LIMITS = {
+  notes: 500, visitor_name: 80, purpose: 60, title: 150, description: 2000, content: 5000, full_name: 80,
+  flat_number: 20, vehicle_number: 20, resident_name: 80, resident_email: 200, email: 200, amenity: 60,
+  assigned_to: 80, month_label: 40, category: 40,
+};
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+function badFieldIn(entity, input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  for (const [key, max] of Object.entries(FIELD_LIMITS)) {
+    const v = input[key];
+    if (v !== undefined && v !== null && (typeof v === 'object' || String(v).length > max)) {
+      return `${key} must be text of at most ${max} characters`;
+    }
+  }
+  if (entity === 'AmenityBooking') {
+    if (input.booking_date !== undefined && !ISO_DAY.test(String(input.booking_date))) return 'booking_date must look like 2026-12-31';
+    for (const k of ['start_time', 'end_time']) {
+      if (input[k] !== undefined && !HH_MM.test(String(input[k]))) return `${k} must look like 18:30`;
+    }
+  }
+  return null;
+}
+entityRouter.use('/:name', (req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH'].includes(req.method)) return next();
+  const items = Array.isArray(req.body) ? req.body : Array.isArray(req.body?.items) ? req.body.items : [req.body];
+  for (const item of items) {
+    const bad = badFieldIn(req.params.name, item);
+    if (bad) return res.status(400).json({ message: bad });
+  }
+  next();
+});
 entityRouter.use('/:name', enforceEntityAccess);
 
 function assertUserWriteAllowed(req, res) {
@@ -3703,7 +3778,7 @@ entityRouter.get('/:name', wrap(async (req, res) => {
       return { ...rest, photo_count: Array.isArray(photos) ? photos.length : 0 };
     }));
   }
-  res.json(rows.map((r) => clean(entity, r)));
+  res.json(rows.map((r) => clean(entity, hideBookingDetails(req.user, entity, r))));
 }));
 
 entityRouter.get('/:name/:id', wrap(async (req, res) => {
@@ -3711,7 +3786,7 @@ entityRouter.get('/:name/:id', wrap(async (req, res) => {
   const record = await getEntityRecord(req.schemaName, entity, req.params.id);
   if (!record) return res.status(404).json({ message: `${entity} not found` });
     if (!canRead(req.user, entity, record)) return res.status(404).json({ message: `${entity} not found` });
-  res.json(clean(entity, record));
+  res.json(clean(entity, hideBookingDetails(req.user, entity, record)));
 }));
 
 entityRouter.post('/:name/bulk', wrap(async (req, res) => {
