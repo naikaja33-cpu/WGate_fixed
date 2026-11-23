@@ -68,7 +68,7 @@ export function NotificationProvider({ children }) {
     const unsubVisitorUpdate = wgate.entities.Visitor.subscribe((event) => {
       if (event.type !== 'update') return;
       const v = event.data;
-      if (!v.status || v.status === 'pending') return;
+      if (!v.status || v.status === 'pending' || v.status === 'expired') return;
 
       const isMyFlat = isResident && user.flat_number && v.flat_number === user.flat_number;
       if (isMyFlat) {

@@ -85,7 +85,8 @@ export default function Visitors() {
           <TabsTrigger value="all" className="flex-1 text-xs">All</TabsTrigger>
           <TabsTrigger value="pending" className="flex-1 text-xs">Pending</TabsTrigger>
           <TabsTrigger value="approved" className="flex-1 text-xs">Approved</TabsTrigger>
-          <TabsTrigger value="rejected" className="flex-1 text-xs">Rejected</TabsTrigger>
+         <TabsTrigger value="rejected" className="flex-1 text-xs">Rejected</TabsTrigger>
+          <TabsTrigger value="expired" className="flex-1 text-xs">Expired</TabsTrigger>
         </TabsList>
       </Tabs>
 

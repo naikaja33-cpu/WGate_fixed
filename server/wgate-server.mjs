@@ -1056,6 +1056,28 @@ async function cleanupOldRecords() {
   }
   console.log('[cleanup] Retention cleanup pass complete.');
 }
+// A visitor request nobody answered in time is marked "expired", so old requests do not pile up as Pending.
+// Set VISITOR_PENDING_EXPIRE_MINUTES on the server to change the time (default 120 = 2 hours, 0 = never expire).
+const VISITOR_EXPIRE_MINUTES = Number(process.env.VISITOR_PENDING_EXPIRE_MINUTES ?? 120);
+const lastVisitorSweep = new Map(); // schema -> when it was last checked
+async function expirePendingVisitors(schemaName) {
+  if (!(VISITOR_EXPIRE_MINUTES > 0)) return;
+  const cutoff = new Date(Date.now() - VISITOR_EXPIRE_MINUTES * 60 * 1000).toISOString();
+  const now = nowIso();
+  try {
+    const { rows } = await pool.query(
+      `UPDATE "${schemaName}".entity_records
+       SET data = data || jsonb_build_object('status', 'expired', 'expired_at', $2::text, 'updated_date', $2::text),
+           updated_date = $2::timestamptz
+       WHERE entity = 'Visitor' AND data->>'status' = 'pending' AND created_date < $1::timestamptz
+       RETURNING data`,
+      [cutoff, now]
+    );
+    for (const r of rows) broadcast(schemaName, 'Visitor', 'update', r.data);
+  } catch (err) {
+    console.error(`[visitors] Could not expire old requests for ${schemaName}:`, err.message);
+  }
+}
 async function pruneSessions() {
   await pool.query('DELETE FROM sessions WHERE expires_at <= now()');
 }
@@ -3605,6 +3627,7 @@ async function authorizeUpdate(req, res, entity, record, patch) {
         : denyWrite(res, 'Security can only check out approved visitors');
     }
     if (isResident(user) && sameFlat(user, record)) {
+      if (record.status === 'expired') return denyWrite(res, 'This request has expired. Ask the guard to add the visitor again.');
       const onlyDecision = keys.length === 1 && keys[0] === 'status' && ['approved', 'rejected'].includes(body.status);
       return onlyDecision ? body : denyWrite(res, 'You can only approve or reject visitors for your flat');
     }
@@ -3730,6 +3753,11 @@ async function buildRecord(schemaName, entity, input, actor, activeSociety) {
 
 entityRouter.get('/:name', wrap(async (req, res) => {
   const entity = req.params.name;
+  // Before a visitor list is sent, mark requests that nobody answered in time as expired (checked at most every 2 minutes).
+  if (entity === 'Visitor' && Date.now() - (lastVisitorSweep.get(req.schemaName) || 0) > 2 * 60 * 1000) {
+    lastVisitorSweep.set(req.schemaName, Date.now());
+    await expirePendingVisitors(req.schemaName);
+  }
   let query = {};
   if (req.query.q) {
     try { query = JSON.parse(String(req.query.q)); } catch { return res.status(400).json({ message: 'Invalid q parameter' }); }
