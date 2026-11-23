@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { wgate } from '@/api/wgateClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { formatDay } from '@/lib/ist';
+import { formatDay ,formatIST} from '@/lib/ist';
 import { UserCheck, X, Repeat, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,6 +57,21 @@ export default function PreApprovals() {
     queryKey: ['pre-approvals'],
     queryFn: () => wgate.entities.PreApproval.list('-created_date', 200),
   });
+
+  // The gate's records, so each pre-approval can show when that person came in and went out.
+  const { data: visitors = [] } = useQuery({
+    queryKey: ['visitors-for-preapprovals'],
+    queryFn: () => wgate.entities.Visitor.list('-created_date', 100),
+  });
+  const lastVisit = useMemo(() => {
+    const map = {};
+    for (const v of visitors) {
+      if (!v.pre_approval_id) continue;
+      const seen = map[v.pre_approval_id];
+      if (!seen || String(v.check_in_time || '') > String(seen.check_in_time || '')) map[v.pre_approval_id] = v;
+    }
+    return map;
+  }, [visitors]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['pre-approvals'] });
 
@@ -262,7 +277,15 @@ export default function PreApprovals() {
                 {(isAdmin || isGuard) && (
                   <p className="text-xs text-muted-foreground mt-1">Flat {r.flat_number || '—'} · {r.resident_email}</p>
                 )}
-                {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
+                  {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
+                {lastVisit[r.id] && (
+                  <p className="text-xs mt-1 font-medium text-emerald-700">
+                    Last visit: in {formatIST(lastVisit[r.id].check_in_time, 'd MMM, h:mm a')}
+                    {lastVisit[r.id].check_out_time
+                      ? ` · out ${formatIST(lastVisit[r.id].check_out_time, 'd MMM, h:mm a')}`
+                      : ' · still inside'}
+                  </p>
+                )}
               </div>
               {!isGuard && r.status === 'active' && (
                 <Button

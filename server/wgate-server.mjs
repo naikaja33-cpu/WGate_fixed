@@ -3466,7 +3466,8 @@ async function authorizeCreate(req, res, entity, input) {
     if (match) {
       body.status = 'approved';
       body.flat_number = body.flat_number || match.flat_number;
-      body.pre_approval_id = match.id;
+        body.pre_approval_id = match.id;
+      body.pre_approval_category = match.category || '';
     } else {
       body.status = 'pending'; // guards cannot pre-approve their own check-ins
     }
@@ -4048,6 +4049,8 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
     resident_email: pass.resident_email,
     status: 'approved',
     check_in_time: nowIso(),
+    purpose: 'guest',
+    notes: pass.notes || '',
     gate_pass_id: pass.id,
   }, user);
   await insertEntityRecord(req.schemaName, 'Visitor', visitorRecord);

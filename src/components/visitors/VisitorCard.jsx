@@ -47,9 +47,19 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
-          {purposeLabels[visitor.purpose] || visitor.purpose}
-        </span>
+        {(purposeLabels[visitor.purpose] || visitor.purpose) && (
+          <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
+            {purposeLabels[visitor.purpose] || visitor.purpose}
+          </span>
+        )}
+        {visitor.gate_pass_id && (
+          <span className="flex items-center gap-1 bg-violet-100 text-violet-700 px-2 py-1 rounded-lg">🎫 Gate pass</span>
+        )}
+        {visitor.pre_approval_id && (
+          <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg">
+            ✅ Pre-approved{visitor.pre_approval_category ? ` · ${visitor.pre_approval_category}` : ''}
+          </span>
+        )}
         {visitor.visitor_phone && (
           <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
             <Phone className="w-3 h-3" /> {visitor.visitor_phone}
@@ -62,8 +72,16 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
         )}
         {visitor.check_in_time && (
           <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
-            <Clock className="w-3 h-3" /> {formatIST(visitor.check_in_time, 'd MMM, h:mm a')}
+            <Clock className="w-3 h-3" /> In {formatIST(visitor.check_in_time, 'd MMM, h:mm a')}
           </span>
+        )}
+        {visitor.check_out_time && (
+          <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
+            <LogOutIcon className="w-3 h-3" /> Out {formatIST(visitor.check_out_time, 'd MMM, h:mm a')}
+          </span>
+        )}
+        {visitor.notes && (
+          <span className="bg-muted px-2 py-1 rounded-lg max-w-full truncate">{visitor.notes}</span>
         )}
       </div>
 
