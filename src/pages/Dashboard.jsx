@@ -6,6 +6,7 @@ import { Users, Wrench, Clock, CheckCircle2, Bell, BellRing, ChevronRight, Alert
 import StatCard from '@/components/dashboard/StatCard';
 import HomeTabs from '@/components/dashboard/HomeTabs';
 import GateDesk from '@/components/dashboard/GateDesk';
+import FlatVisitorsToday from '@/components/dashboard/FlatVisitorsToday';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
@@ -202,7 +203,10 @@ export default function Dashboard() {
             {statCards}
 
       {/* Security and admin: filter by what is arriving, then check in or out in one tap. */}
-      {isStaff && <GateDesk isEnabled={isEnabled} visitors={visitors} tickets={tickets} />}
+      {/* {isStaff && <GateDesk isEnabled={isEnabled} visitors={visitors} tickets={tickets} />} */}
+
+      {/* Members: who is inside and who came and left today at their flat.
+      {isResident && showVisitors && <FlatVisitorsToday visitors={visitors} />} */}
 
       {classic ? (
         (isEnabled('PreApprovals') || isEnabled('GatePasses') || isEnabled('Amenities')) && (
@@ -219,6 +223,12 @@ export default function Dashboard() {
           counts={{ visitors: waiting, tickets: openTickets.length, bills: billCount }}
         />
       )}
+
+      {/* Security and admin: filter by what is arriving, then check in or out in one tap. Sits below the tabs. */}
+      {isStaff && <GateDesk isEnabled={isEnabled} visitors={visitors} tickets={tickets} />}
+
+      {/* Members: who is inside and who came and left today at their flat. Sits below the tabs. */}
+      {isResident && showVisitors && <FlatVisitorsToday visitors={visitors} />}
 
       {showNotices && notices.length > 0 && (
         <div className="space-y-3">
