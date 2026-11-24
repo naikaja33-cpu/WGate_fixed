@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Wrench, Clock, CheckCircle2, Bell, BellRing, ChevronRight, AlertTriangle, CalendarClock, UserCheck, KeyRound, LayoutGrid, LayoutList } from 'lucide-react';
 import StatCard from '@/components/dashboard/StatCard';
 import HomeTabs from '@/components/dashboard/HomeTabs';
+import GateDesk from '@/components/dashboard/GateDesk';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import TicketCard from '@/components/tickets/TicketCard';
 import NoticeCard from '@/components/notices/NoticeCard';
@@ -198,7 +199,10 @@ export default function Dashboard() {
       )}
 
       {/* Count cards sit above the tabs (admin) or at the top of the classic home. */}
-      {statCards}
+            {statCards}
+
+      {/* Security and admin: filter by what is arriving, then check in or out in one tap. */}
+      {isStaff && <GateDesk isEnabled={isEnabled} visitors={visitors} tickets={tickets} />}
 
       {classic ? (
         (isEnabled('PreApprovals') || isEnabled('GatePasses') || isEnabled('Amenities')) && (

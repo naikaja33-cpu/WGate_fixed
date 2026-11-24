@@ -4046,9 +4046,21 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
     return res.status(409).json({ message: `This pass expired on ${passEnd}` });
   }
 
+  // A pass with an end date can be used once per day until that date. A one-day pass is single use.
+  const today = todayStr();
+  const multiDay = passEnd !== pass.valid_date;
+  const usedDates = Array.isArray(pass.used_dates) ? pass.used_dates : [];
+  if (multiDay && usedDates.includes(today)) {
+    return res.status(409).json({
+      message: today < passEnd
+        ? `Already used today. It can be used again tomorrow, until ${passEnd}`
+        : 'Already used today. This was the last day of the pass',
+    });
+  }
   const updatedPass = {
     ...pass,
-    status: 'used',
+    status: !multiDay || today >= passEnd ? 'used' : 'active',
+    used_dates: [...usedDates, today],
     used_at: nowIso(),
     used_by: user.email,
     updated_date: nowIso(),

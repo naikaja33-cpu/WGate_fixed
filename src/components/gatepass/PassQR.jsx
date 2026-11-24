@@ -38,7 +38,7 @@ function buildShareImage(qrCanvas, pass) {
   const multi = pass.valid_until && pass.valid_until !== pass.valid_date;
   const when = pass.valid_date ? formatDay(pass.valid_date, 'd MMM yyyy') : '';
   const until = multi ? formatDay(pass.valid_until, 'd MMM yyyy') : '';
-  ctx.fillText(multi ? `Valid ${when} to ${until} · one use` : `Valid on ${when} only · one use`, W / 2, 790);
+  ctx.fillText(multi ? `Valid ${when} to ${until} · once a day` : `Valid on ${when} only · one use`, W / 2, 790);
   return c.toDataURL('image/png').split(',')[1];
 }
 

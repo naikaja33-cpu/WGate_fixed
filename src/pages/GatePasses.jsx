@@ -222,7 +222,7 @@ export default function GatePasses() {
               <PassQR pass={lastCreated} />
               <p className="text-xs text-emerald-700">
                 {lastCreated.valid_until && lastCreated.valid_until !== lastCreated.valid_date
-                  ? `Valid ${validityText(lastCreated)} · one use.`
+                  ? `Valid ${validityText(lastCreated)} · can be used once each day.`
                   : `Valid on ${validityText(lastCreated)} only.`}
               </p>
             </div>
@@ -273,7 +273,7 @@ export default function GatePasses() {
               value={form.valid_until}
               onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value }))}
             />
-            <p className="text-xs text-muted-foreground">Leave empty for a one-day pass. The pass can be used once, on any day up to this date.</p>
+            <p className="text-xs text-muted-foreground">Leave empty for a one-day pass. With an end date, the pass works once each day, every day up to that date.</p>
           </div>
 
           <div className="space-y-2">
@@ -317,7 +317,8 @@ export default function GatePasses() {
                   <p className="text-sm text-muted-foreground">{r.visitor_name}{r.visitor_phone ? ` · ${r.visitor_phone}` : ''}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Valid {validityText(r)}
-                    {r.status === 'used' && r.used_at ? ` · used ${formatIST(r.used_at, 'd MMM, h:mm a')}` : ''}
+                    {r.used_at ? ` · ${r.status === 'used' ? 'used' : 'last used'} ${formatIST(r.used_at, 'd MMM, h:mm a')}` : ''}
+                    {Array.isArray(r.used_dates) && r.used_dates.length > 1 ? ` · ${r.used_dates.length} days used` : ''}
                   </p>
                   {isAdmin && <p className="text-xs text-muted-foreground mt-1">Flat {r.flat_number || '—'} · {r.resident_email}</p>}
                   {r.notes && <p className="text-xs text-muted-foreground mt-1">{r.notes}</p>}
