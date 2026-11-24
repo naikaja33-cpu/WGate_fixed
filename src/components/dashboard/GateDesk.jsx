@@ -40,7 +40,7 @@ function Empty({ children }) {
   return <p className="py-3 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
-export default function GateDesk({ isEnabled, visitors = [], tickets = [] }) {
+export default function GateDesk({ isEnabled, visitors = [], tickets: ticketsProp }) {
   const queryClient = useQueryClient();
   const today = istToday();
   const [tab, setTab] = useState('visitors');
@@ -69,14 +69,24 @@ export default function GateDesk({ isEnabled, visitors = [], tickets = [] }) {
     enabled: showAmenities,
   });
 
+  // The dashboard hands over its tickets; on the guard's Gate page there are none, so load them here.
+  const { data: ownTickets = [] } = useQuery({
+    queryKey: ['desk-tickets'],
+    queryFn: () => wgate.entities.ServiceTicket.list('-created_date', 50),
+    enabled: showTickets && !ticketsProp,
+  });
+  const tickets = ticketsProp || ownTickets;
+
   // Keep the lists fresh when something changes at the gate.
   useEffect(() => {
     const feeds = [
       ['Visitor', 'visitors-dashboard'],
+      ['Visitor', 'visitors'],
       ['PreApproval', 'desk-preapprovals'],
       ['GatePass', 'desk-gatepasses'],
       ['AmenityBooking', 'desk-bookings'],
       ['ServiceTicket', 'tickets-dashboard'],
+      ['ServiceTicket', 'desk-tickets'],
     ];
     const stops = feeds.map(([entity, key]) => {
       try {
@@ -240,9 +250,11 @@ export default function GateDesk({ isEnabled, visitors = [], tickets = [] }) {
             {doneToday.filter((v) => hit(v.visitor_name, v.flat_number, v.visitor_phone)).length > 0 && (
               <>
                 <Heading>Left today</Heading>
-                {doneToday.filter((v) => hit(v.visitor_name, v.flat_number, v.visitor_phone)).map((v) => (
-                  <Row key={v.id} title={v.visitor_name} sub={visitorSub(v)} note={`Out ${formatIST(v.check_out_time, 'h:mm a')}`} />
-                ))}
+                <div className="max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1">
+                  {doneToday.filter((v) => hit(v.visitor_name, v.flat_number, v.visitor_phone)).map((v) => (
+                    <Row key={v.id} title={v.visitor_name} sub={visitorSub(v)} note={`Out ${formatIST(v.check_out_time, 'h:mm a')}`} />
+                  ))}
+                </div>
               </>
             )}
             <Link to="/Visitors" className="block pt-1 text-center text-sm font-medium text-primary">All visitors →</Link>

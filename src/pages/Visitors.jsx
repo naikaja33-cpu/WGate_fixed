@@ -8,6 +8,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VisitorCard from '@/components/visitors/VisitorCard';
 import AddVisitorForm from '@/components/visitors/AddVisitorForm';
 import ExportVisitorsDialog from '@/components/visitors/ExportVisitorsDialog';
+import GateDesk from '@/components/dashboard/GateDesk';
+import { useEnabledMenus } from '@/lib/useEnabledMenus';
 
 export default function Visitors() {
   const { user } = useAuth();
@@ -16,6 +18,7 @@ export default function Visitors() {
   const isAdmin = role === 'admin';
   const isResident = role === 'tenant' || role === 'owner'|| role === 'family';
   const canAdd = isGuard || isAdmin;
+  const { isEnabled } = useEnabledMenus();
 
   const [showForm, setShowForm] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -70,6 +73,9 @@ export default function Visitors() {
           </Button>
         )}
       </div>
+
+      {/* The guard has no Dashboard, so the Gate desk sits at the top of the Gate page. */}
+      {isGuard && <GateDesk isEnabled={isEnabled} visitors={visitors} />}
 
             {isAdmin && (
         <div className="flex justify-end">
