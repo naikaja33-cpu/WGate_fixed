@@ -47,7 +47,7 @@ export default function VisitorCard({ visitor, onApprove, onReject, onCheckout, 
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        {(purposeLabels[visitor.purpose] || visitor.purpose) && (
+        {!visitor.gate_pass_id && (purposeLabels[visitor.purpose] || visitor.purpose) && (
           <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
             {purposeLabels[visitor.purpose] || visitor.purpose}
           </span>

@@ -106,7 +106,7 @@ export function NotificationProvider({ children }) {
     }));
     watchNew('GatePass', isStaffUser, (r) => ({
       title: 'New Gate Pass', type: 'gatepass',
-      message: `🎫 ${who(r)} made a gate pass for ${r.visitor_name} on ${r.valid_date}`,
+      message: `🎫 ${who(r)} made a gate pass for ${r.visitor_name} ${r.valid_until && r.valid_until !== r.valid_date ? `from ${r.valid_date} to ${r.valid_until}` : `on ${r.valid_date}`}`,
     }));
     watchNew('ServiceTicket', isStaffUser, (r) => ({
       title: 'New Service Ticket', type: 'ticket',

@@ -35,8 +35,10 @@ function buildShareImage(qrCanvas, pass) {
   ctx.fillText(String(pass.visitor_name || ''), W / 2, 745);
   ctx.fillStyle = '#6b7280';
   ctx.font = '26px sans-serif';
+  const multi = pass.valid_until && pass.valid_until !== pass.valid_date;
   const when = pass.valid_date ? formatDay(pass.valid_date, 'd MMM yyyy') : '';
-  ctx.fillText(`Valid on ${when} only · one use`, W / 2, 790);
+  const until = multi ? formatDay(pass.valid_until, 'd MMM yyyy') : '';
+  ctx.fillText(multi ? `Valid ${when} to ${until} · one use` : `Valid on ${when} only · one use`, W / 2, 790);
   return c.toDataURL('image/png').split(',')[1];
 }
 

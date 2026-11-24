@@ -13,6 +13,13 @@ import { Label } from '@/components/ui/label';
 // Today's date in India (YYYY-MM-DD), whatever the phone's own time zone is. Matches the server.
 const todayStr = () => new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
 
+// "24 Nov 2026" for a one-day pass, "24 Nov – 26 Nov 2026" for a longer one.
+const validityText = (p) => {
+  const end = p.valid_until && p.valid_until !== p.valid_date ? p.valid_until : '';
+  if (!end) return formatDay(p.valid_date, 'd MMM yyyy');
+  return `${formatDay(p.valid_date, 'd MMM')} – ${formatDay(end, 'd MMM yyyy')}`;
+};
+
 function StatusBadge({ status }) {
   const styles = {
     active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -62,6 +69,7 @@ export default function GatePasses() {
     visitor_name: '',
     visitor_phone: '',
     valid_date: todayStr(),
+    valid_until: '',
     notes: '',
   });
   const [formError, setFormError] = useState('');
@@ -212,7 +220,11 @@ export default function GatePasses() {
               <p className="text-xs font-medium text-emerald-800">Pass created — share this code:</p>
               <CodeDisplay code={lastCreated.code} />
               <PassQR pass={lastCreated} />
-              <p className="text-xs text-emerald-700">Valid on {formatDay(lastCreated.valid_date, 'd MMM yyyy')} only.</p>
+              <p className="text-xs text-emerald-700">
+                {lastCreated.valid_until && lastCreated.valid_until !== lastCreated.valid_date
+                  ? `Valid ${validityText(lastCreated)} · one use.`
+                  : `Valid on ${validityText(lastCreated)} only.`}
+              </p>
             </div>
           )}
 
@@ -244,9 +256,24 @@ export default function GatePasses() {
               type="date"
               min={todayStr()}
               value={form.valid_date}
-              onChange={(e) => setForm((f) => ({ ...f, valid_date: e.target.value }))}
+              onChange={(e) => setForm((f) => ({
+                ...f,
+                valid_date: e.target.value,
+                valid_until: f.valid_until && f.valid_until < e.target.value ? '' : f.valid_until,
+              }))}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Valid until (optional)</Label>
+            <Input
+              type="date"
+              min={form.valid_date || todayStr()}
+              value={form.valid_until}
+              onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground">Leave empty for a one-day pass. The pass can be used once, on any day up to this date.</p>
           </div>
 
           <div className="space-y-2">
@@ -289,7 +316,7 @@ export default function GatePasses() {
                   </div>
                   <p className="text-sm text-muted-foreground">{r.visitor_name}{r.visitor_phone ? ` · ${r.visitor_phone}` : ''}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Valid {formatDay(r.valid_date, 'd MMM yyyy')}
+                    Valid {validityText(r)}
                     {r.status === 'used' && r.used_at ? ` · used ${formatIST(r.used_at, 'd MMM, h:mm a')}` : ''}
                   </p>
                   {isAdmin && <p className="text-xs text-muted-foreground mt-1">Flat {r.flat_number || '—'} · {r.resident_email}</p>}

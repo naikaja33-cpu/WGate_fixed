@@ -1321,7 +1321,7 @@ async function notifyAboutNewRecord(schemaName, entity, r) {
     return notifyStaff(schemaName, {
       ...common, type: 'gatepass', url: '/GatePasses',
       title: 'New gate pass',
-      body: `${who} made a gate pass for ${r.visitor_name} on ${prettyDay(r.valid_date)}.`,
+      body: `${who} made a gate pass for ${r.visitor_name} ${r.valid_until && r.valid_until !== r.valid_date ? `from ${prettyDay(r.valid_date)} to ${prettyDay(r.valid_until)}` : `on ${prettyDay(r.valid_date)}`}.`,
     });
   }
   if (entity === 'ServiceTicket') {
@@ -3415,6 +3415,15 @@ async function authorizeCreate(req, res, entity, input) {
       res.status(400).json({ message: 'Valid date cannot be in the past' });
       return null;
     }
+    const valid_until = body.valid_until || valid_date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(valid_until)) || valid_until < valid_date) {
+      res.status(400).json({ message: 'Valid until date cannot be before the valid date' });
+      return null;
+    }
+    if ((Date.parse(valid_until) - Date.parse(valid_date)) / 86400000 > 90) {
+      res.status(400).json({ message: 'A gate pass can be valid for 90 days at most' });
+      return null;
+    }
     const code = await generateUniqueGatePassCode(req.schemaName);
     return {
       code,
@@ -3422,6 +3431,7 @@ async function authorizeCreate(req, res, entity, input) {
       visitor_phone: body.visitor_phone || '',
       notes: typeof body.notes === 'string' ? body.notes : '',
       valid_date,
+      valid_until,
       flat_number: user.role === 'admin' && body.flat_number ? body.flat_number : (user.flat_number || ''),
       resident_email: user.role === 'admin' && body.resident_email ? normEmail(body.resident_email) : user.email,
       resident_name: user.role === 'admin' && body.resident_name ? body.resident_name : (user.full_name || ''),
@@ -4028,8 +4038,12 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
       message: `Already used${pass.used_at ? ' at ' + new Date(pass.used_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''}`,
     });
   }
-  if (pass.valid_date !== todayStr()) {
-    return res.status(409).json({ message: `This pass is valid for ${pass.valid_date}, not today` });
+  const passEnd = pass.valid_until || pass.valid_date;
+  if (todayStr() < pass.valid_date) {
+    return res.status(409).json({ message: `This pass is not valid yet. It starts on ${pass.valid_date}` });
+  }
+  if (todayStr() > passEnd) {
+    return res.status(409).json({ message: `This pass expired on ${passEnd}` });
   }
 
   const updatedPass = {
@@ -4049,7 +4063,6 @@ app.post('/api/gate-pass/verify', requireAuth, requireSocietySchema, wrap(async 
     resident_email: pass.resident_email,
     status: 'approved',
     check_in_time: nowIso(),
-    purpose: 'guest',
     notes: pass.notes || '',
     gate_pass_id: pass.id,
   }, user);
