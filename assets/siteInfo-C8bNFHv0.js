@@ -1,0 +1,1 @@
+const a={name:"WGate",tagline:"Simplified gate and society management",whatsapp:"918073939280",whatsappMessage:"Hi WGate, I would like to know more about WGate for our society.",phone:"+91 8073939280",hours:"Mon to Sun, 10 AM to 7 PM IST",address:"Bangalore, Karnataka, India"},e=t=>`https://wa.me/${a.whatsapp}?text=${encodeURIComponent(a.whatsappMessage)}`;export{a as S,e as w};
