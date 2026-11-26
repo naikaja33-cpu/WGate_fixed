@@ -5,7 +5,7 @@ import { SITE, whatsappLink } from '@/lib/siteInfo';
 export default function ContactUs() {
   const rows = [
     { icon: Mail, label: 'Email', value: SITE.email, href: `mailto:${SITE.email}` },
-    { icon: Phone, label: 'Phone', value: SITE.phone, href: `tel:${SITE.phone.replace(/[^\d+]/g, '')}` },
+    { icon: Phone, label: 'WhatsApp', value: SITE.phone, href: `tel:${SITE.phone.replace(/[^\d+]/g, '')}` },
     { icon: Clock, label: 'Support hours', value: SITE.hours },
     { icon: MapPin, label: 'Location', value: SITE.address },
   ];

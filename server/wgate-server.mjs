@@ -71,7 +71,9 @@ function escapeHtml(str) {
 // It uses normal HTTPS, so it works on Render's free tier (which blocks SMTP).
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
 const APPS_SCRIPT_SECRET = process.env.APPS_SCRIPT_SECRET || ''; // must equal RELAY_SECRET in the script
+// const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'WGate';
 const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'WGate';
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO || ''; // replies from residents go here, e.g. info@wwgate.in
 
 // Returns { ok: true } or { ok: false, error }. Never throws, so an email problem can't break creating an account.
 async function sendEmail({ to, subject, html, text }) {
@@ -84,7 +86,7 @@ async function sendEmail({ to, subject, html, text }) {
     const response = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: APPS_SCRIPT_SECRET, to, subject, html, text, fromName: EMAIL_FROM_NAME }),
+  body: JSON.stringify({ secret: APPS_SCRIPT_SECRET, to, subject, html, text, fromName: EMAIL_FROM_NAME, replyTo: EMAIL_REPLY_TO }),
       redirect: 'follow', // Google answers with a redirect to the real result
       signal: controller.signal,
     });
