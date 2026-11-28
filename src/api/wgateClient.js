@@ -206,6 +206,9 @@ const superadmin = {
   async updateSocietyTheme(id, theme) {
     return request(`/superadmin/societies/${id}/theme`, { method: 'PUT', body: { theme } });
   },
+  async importMembers(id, rows, dryRun) {
+    return request(`/superadmin/societies/${id}/import-members`, { method: 'POST', body: { rows, dry_run: dryRun } });
+  },
   async createAdmin(data) {
     return request('/superadmin/admins', { method: 'POST', body: data });
   },

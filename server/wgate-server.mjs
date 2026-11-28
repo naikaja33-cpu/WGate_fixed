@@ -1568,9 +1568,10 @@ app.use(compression({
 // Small by default. Only visitors (the guard's photo) and community posts carry photos, so only they get the big limit.
 const smallJson = express.json({ limit: '100kb' });
 const photoJson = express.json({ limit: '10mb' });
+const bulkJson = express.json({ limit: '1mb' }); // the super admin's member import (up to 1000 rows)
 app.use((req, res, next) =>
-  (/^\/api\/entities\/(Visitor|ClassifiedPost)(\/|$)/.test(req.path) ? photoJson : smallJson)(req, res, next));
-
+  (/^\/api\/superadmin\/societies\/[^/]+\/import-members$/.test(req.path) ? bulkJson
+    : /^\/api\/entities\/(Visitor|ClassifiedPost)(\/|$)/.test(req.path) ? photoJson : smallJson)(req, res, next));
 // A safety net on top of the per-route limits: one signed-in account cannot pull data non-stop
 // (for example a stolen token running a scraper). Normal use stays far below this.
 const accountApiLimit = rateLimit({
@@ -2562,6 +2563,129 @@ app.put('/api/superadmin/societies/:id/theme', requireAuth, requireSuperadmin, w
     });
   }
   res.json({ success: true, theme });
+}));
+/* Bulk-add members from a spreadsheet (super admin). The browser reads the Excel file and sends the rows here.
+   dry_run (the default) only checks the rows; dry_run:false creates the logins. Each member gets a one-time
+   password and must change it at first sign-in. Flat sizes and rates are saved for billing. */
+const IMPORT_MAX_ROWS = 1000;
+const IMPORT_LOGIN_DOMAIN = 'm.wwgate.in'; // no mailbox here: it only makes unique login IDs for members without an email
+const cleanImportPhone = (v) => {
+  let d = String(v ?? '').replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('91')) d = d.slice(2);
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  return d;
+};
+const importNumber = (v) => (v === undefined || v === null || String(v).trim() === '' ? null : Number(String(v).replace(/,/g, '')));
+app.post('/api/superadmin/societies/:id/import-members', requireAuth, requireSuperadmin, wrap(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(404).json({ message: 'Society not found' });
+  const society = await getSocietyById(req.params.id);
+  if (!society) return res.status(404).json({ message: 'Society not found' });
+  const schemaName = await getSocietySchemaName(society.id);
+
+  const dryRun = req.body?.dry_run !== false;
+  const input = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  if (input.length === 0) return res.status(400).json({ message: 'There are no rows to import' });
+  if (input.length > IMPORT_MAX_ROWS) return res.status(400).json({ message: `Please import at most ${IMPORT_MAX_ROWS} members at a time` });
+
+  const users = await listEntity(schemaName, 'User');
+  const takenLogins = new Set(users.map((u) => normEmail(u.email)));
+  const knownMembers = new Set(users.map((u) => `${flatKey(u.flat_number)}|${String(u.phone || '').trim()}`));
+  const areaByFlat = new Map((await listEntity(schemaName, 'FlatArea')).map((a) => [flatKey(a.flat_number), a]));
+
+  const results = [];
+  const summary = { created: 0, skipped: 0, failed: 0, areas_saved: 0 };
+  for (let i = 0; i < input.length; i += 1) {
+    const r = input[i] && typeof input[i] === 'object' ? input[i] : {};
+    const flat = String(r.flat_number ?? '').trim();
+    const name = String(r.full_name ?? '').trim().slice(0, 80);
+    const phone = cleanImportPhone(r.phone);
+    const email = normEmail(r.email);
+    const role = String(r.role ?? '').trim().toLowerCase() === 'tenant' ? 'tenant' : 'owner';
+    const area = importNumber(r.area_sqft);
+    const rate = importNumber(r.rate_per_sqft);
+    const row = { row: i + 1, flat_number: flat, full_name: name, phone, role };
+
+    const problems = [];
+    if (!flat || flat.length > 20) problems.push('Flat number is missing or too long');
+    if (!/^\d{10}$/.test(phone)) problems.push('Phone must be 10 digits');
+    if (email && (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) problems.push('Email is not valid');
+    if (area !== null && (!Number.isFinite(area) || area <= 0 || area > 100000)) problems.push('Area must be 1 to 100000 sq ft');
+    if (rate !== null && (!Number.isFinite(rate) || rate <= 0 || rate > 10000)) problems.push('Rate must be more than 0');
+    if (problems.length) {
+      summary.failed += 1;
+      results.push({ ...row, status: 'error', note: problems.join('. ') });
+      continue;
+    }
+
+    // The flat's size and rate, saved even when the member already exists (so a corrected file can be re-uploaded).
+    const key = flatKey(flat);
+    const existingArea = areaByFlat.get(key);
+    const newArea = area ?? existingArea?.area_sqft ?? null;
+    if (newArea !== null && (area !== null || rate !== null)) {
+      summary.areas_saved += 1;
+      const record = existingArea
+        ? { ...existingArea, area_sqft: newArea, ...(rate !== null ? { rate_per_sqft: rate } : {}), updated_date: nowIso() }
+        : { ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }), flat_number: flat, area_sqft: newArea, ...(rate !== null ? { rate_per_sqft: rate } : {}) };
+      if (!dryRun) {
+        if (existingArea) await updateEntityRecord(schemaName, 'FlatArea', record.id, record);
+        else await insertEntityRecord(schemaName, 'FlatArea', record);
+      }
+      areaByFlat.set(key, record);
+    }
+
+    if (knownMembers.has(`${key}|${phone}`)) {
+      summary.skipped += 1;
+      results.push({ ...row, status: 'skipped', note: 'Already a member (same flat and phone)' });
+      continue;
+    }
+    let login = email;
+    const generated = !email;
+    if (generated) {
+      login = `${phone}@${IMPORT_LOGIN_DOMAIN}`;
+      if (takenLogins.has(login)) login = `${phone}-${key.replace(/[^a-z0-9]/g, '')}@${IMPORT_LOGIN_DOMAIN}`;
+    }
+    if (takenLogins.has(login)) {
+      summary.skipped += 1;
+      results.push({ ...row, status: 'skipped', login, note: 'This login already exists in the society' });
+      continue;
+    }
+    takenLogins.add(login);
+    knownMembers.add(`${key}|${phone}`);
+
+    if (dryRun) {
+      summary.created += 1;
+      results.push({ ...row, status: 'new', login, login_generated: generated });
+      continue;
+    }
+    const tempPassword = generateTempPassword();
+    const user = {
+      ...baseRecord({ created_by: req.user.email, created_by_id: req.user.id }),
+      email: login,
+      password_hash: hashPassword(tempPassword),
+      full_name: name || `Flat ${flat}`,
+      role,
+      flat_number: flat,
+      phone,
+      society_id: society.id,
+      society_name: society.name,
+      disabled: false,
+      is_verified: false,
+      must_change_password: true,
+      login_generated: generated,
+    };
+    await insertEntityRecord(schemaName, 'User', user);
+    summary.created += 1;
+    results.push({ ...row, status: 'created', login, password: tempPassword, login_generated: generated });
+    await new Promise((resolve) => setImmediate(resolve)); // hashing is slow: let other requests through between members
+  }
+
+  res.json({
+    dry_run: dryRun,
+    society: society.name,
+    login_url: APP_URL ? `${APP_URL}/#/` : '',
+    summary,
+    rows: results,
+  });
 }));
 app.post('/api/superadmin/admins', requireAuth, requireSuperadmin, wrap(async (req, res) => {
   const email = normEmail(req.body?.email);

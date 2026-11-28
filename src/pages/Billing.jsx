@@ -103,7 +103,14 @@ export default function Billing() {
   }, [residents]);
   const [sendingEmails, setSendingEmails] = useState(false);
   // The rate used on the most recent bill, pre-filled next time.
-    const defaultRate = bills.find((b) => b.rate_per_sqft)?.rate_per_sqft;
+// Before the first bill, use the most common rate that came in with the imported flat sizes.
+  const importedRate = useMemo(() => {
+    const counts = {};
+    for (const a of areaRecords) if (a.rate_per_sqft) counts[a.rate_per_sqft] = (counts[a.rate_per_sqft] || 0) + 1;
+    const top = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
+    return top ? Number(top[0]) : undefined;
+  }, [areaRecords]);
+  const defaultRate = bills.find((b) => b.rate_per_sqft)?.rate_per_sqft ?? importedRate;
   const defaultLateFine = bills.find((b) => b.late_fine != null)?.late_fine;
 
   const generateMutation = useMutation({

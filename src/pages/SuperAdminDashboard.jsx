@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound,Menu, Palette } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Copy, Check, LogOut, Pencil, Trash2, KeyRound,Menu, Palette, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import AnnouncementCard from '@/components/announcement/AnnouncementCard';
 import CityPicker from '@/components/CityPicker';
 import { THEMES } from '@/lib/themes';
+import ImportMembersModal from '@/components/superadmin/ImportMembersModal';
 
 // Mirrors the backend's GRACE_DAYS (server/wgate-server.mjs) — how many
 // extra days a society keeps working after its trial date passes before
@@ -76,6 +77,7 @@ export default function SuperAdminDashboard() {
   const [credentialsModal, setCredentialsModal] = useState(null); // { title, email, password }
   const [menuSociety, setMenuSociety] = useState(null); // society whose menu access is being edited
   const [themeSociety, setThemeSociety] = useState(null); // society whose colour theme is being chosen
+  const [importSociety, setImportSociety] = useState(null); // society whose members are being imported from a spreadsheet
     const [planSociety, setPlanSociety] = useState(null); // society whose plan is being changed
       const [clearDataSociety, setClearDataSociety] = useState(null); // society whose data is being cleared
   const loadSocieties = async () => {
@@ -353,6 +355,10 @@ export default function SuperAdminDashboard() {
                     <Palette className="w-3.5 h-3.5 mr-1.5" />
                     Colour Theme
                   </Button>
+                  <Button variant="outline" size="sm" className="col-span-2" onClick={() => setImportSociety(society)}>
+                    <Upload className="w-3.5 h-3.5 mr-1.5" />
+                    Import Members (Excel)
+                  </Button>
                 </div>
                 <Button
                   variant="outline"
@@ -437,6 +443,10 @@ export default function SuperAdminDashboard() {
           onClose={() => setClearDataSociety(null)}
         />
       )}
+      {importSociety && (
+        <ImportMembersModal society={importSociety} onClose={() => setImportSociety(null)} />
+      )}
+
       {credentialsModal && (
         <CredentialsModal
           credentials={credentialsModal}
